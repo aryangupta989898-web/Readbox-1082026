@@ -1,5 +1,6 @@
-import React from "react";
+import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import { BookOpen, Plus } from "@phosphor-icons/react";
 import { Button } from "./ui/button";
 
@@ -12,6 +13,7 @@ const links = [
 ];
 
 export const NavBar = ({ onLog }) => {
+    const [stamp, setStamp] = useState(false);
     return (
         <header
             className="sticky top-0 z-40 backdrop-blur-xl border-b"
@@ -19,9 +21,25 @@ export const NavBar = ({ onLog }) => {
             data-testid="app-header"
         >
             <div className="max-w-6xl mx-auto px-6 py-4 flex items-center gap-8">
-                <NavLink to="/" className="flex items-center gap-2" data-testid="brand-link">
+                <NavLink to="/" onClick={(e) => { e.preventDefault(); setStamp(true); setTimeout(() => setStamp(false), 1400); }} className="flex items-center gap-2 relative" data-testid="brand-link">
                     <BookOpen size={22} weight="fill" color="#00E054" />
                     <span className="font-heading font-bold text-lg tracking-tight">READBOX</span>
+                    <AnimatePresence>
+                        {stamp && (
+                            <motion.div
+                                initial={{ scale: 0.4, rotate: -18, opacity: 0 }}
+                                animate={{ scale: 1, rotate: -8, opacity: 1 }}
+                                exit={{ opacity: 0, scale: 1.2 }}
+                                transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+                                className="absolute -bottom-8 left-6 pointer-events-none"
+                                style={{ fontFamily: "Cormorant Garamond, serif" }}
+                            >
+                                <div className="border-2 border-[#c8ae7d]/70 text-[#c8ae7d] text-[10px] uppercase tracking-[0.3em] px-2 py-1 rounded-sm italic">
+                                    Ex Libris · You
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
                 </NavLink>
                 <nav className="flex items-center gap-6 flex-1">
                     {links.map((l) => (
