@@ -39,3 +39,6 @@ export const coverUrl = (id) => `${API}/readings/${id}/cover`;
 
 export const fetchRecap = (year, month) => api.get(`/recap/${year}/${month}`).then((r) => r.data);
 export const fetchRecapMonths = () => api.get(`/recap/months`).then((r) => r.data);
+
+export const suggestHighlights = (id) => api.post(`/readings/${id}/highlights/suggest`).then((r) => r.data);
+export const fetchAllTags = () => api.get(`/tags/all`).then((r) => r.data);

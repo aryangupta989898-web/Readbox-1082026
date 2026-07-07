@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
+import { fetchAllTags } from "../lib/api";
 import {
     Sword, Skull, Fire, Lightning, Leaf, Book, Brain, Heart,
     Star, Compass, Feather, Crown, Diamond, Flag, Moon, Rocket,
@@ -47,11 +48,22 @@ export const TagsPicker = ({ tags = [], onChange }) => {
     const [color, setColor] = useState(COLORS[0]);
     const [icon, setIcon] = useState("Sword");
     const [open, setOpen] = useState(false);
+    const [existing, setExisting] = useState([]);
 
-    const addTag = () => {
-        if (!name.trim()) return;
-        onChange([...tags, { name: name.trim(), color, icon }]);
-        setName(""); setOpen(false);
+    useEffect(() => {
+        if (open) fetchAllTags().then(setExisting).catch(() => {});
+    }, [open]);
+
+    const currentNames = new Set(tags.map((t) => t.name));
+    const suggestions = existing.filter((t) => !currentNames.has(t.name));
+
+    const addTag = (tag) => {
+        const t = tag || (name.trim() ? { name: name.trim(), color, icon } : null);
+        if (!t) return;
+        onChange([...tags, t]);
+        setName("");
+        if (tag) return; // keep popover open for adding another existing tag
+        setOpen(false);
     };
     const removeTag = (idx) => onChange(tags.filter((_, i) => i !== idx));
 
@@ -67,7 +79,25 @@ export const TagsPicker = ({ tags = [], onChange }) => {
                         + Tag
                     </button>
                 </PopoverTrigger>
-                <PopoverContent className="bg-[#1B2228] border-[#2C3440] text-white w-80 p-4">
+                <PopoverContent className="bg-[#1B2228] border-[#2C3440] text-white w-80 p-4 max-h-[500px] overflow-y-auto">
+                    {suggestions.length > 0 && (
+                        <div className="mb-4">
+                            <div className="label-tag mb-2">Your Tags</div>
+                            <div className="flex flex-wrap gap-2">
+                                {suggestions.map((t) => (
+                                    <button
+                                        key={t.name}
+                                        onClick={() => addTag(t)}
+                                        className="hover:scale-105 transition"
+                                        data-testid={`existing-tag-${t.name}`}
+                                    >
+                                        <TagChip tag={t} />
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="border-b border-[#2C3440] my-4" />
+                        </div>
+                    )}
                     <div className="label-tag mb-2">New Tag</div>
                     <Input
                         placeholder="Tag name..."
@@ -111,7 +141,7 @@ export const TagsPicker = ({ tags = [], onChange }) => {
                     </div>
                     <div className="flex items-center justify-between">
                         <TagChip tag={{ name: name || "preview", color, icon }} />
-                        <Button size="sm" onClick={addTag} className="bg-[#00E054] text-[#14181C] hover:bg-[#00c94a]" data-testid="tag-add-confirm">Add</Button>
+                        <Button size="sm" onClick={() => addTag()} className="bg-[#00E054] text-[#14181C] hover:bg-[#00c94a]" data-testid="tag-add-confirm">Add</Button>
                     </div>
                 </PopoverContent>
             </Popover>

@@ -587,31 +587,27 @@ async def generate_cover(reading_id: str):
     # Build prompt
     prompt_seed = doc.get("cover_prompt") or f"Book about {doc.get('title', 'a topic')}"
     art_prompt = (
-        f"Editorial book cover illustration for a reading titled '{doc.get('title', '')}'. "
-        f"Core theme to communicate: {prompt_seed}. "
-        f"Author context: {doc.get('author', '')}. "
-        "STYLE: Conceptual editorial illustration — symbolism, negative space, ONE unforgettable visual metaphor "
-        "that captures the emotional and philosophical core of THIS SPECIFIC SUBJECT MATTER. "
-        "The metaphor MUST be directly relevant to the actual theme above — no generic 'person by the sea' unless the reading is about that. "
-        "For business/finance/economics readings use abstract capital-flow, geometric market, or industrial metaphors. "
-        "For philosophy use minimal isolated forms. For science use elegant diagrams as art. "
-        "Simplified silhouettes, stylized forms, minimal facial detail. NO photorealism, NO 3D, NO lens flares. "
-        "Flat colors with subtle painterly grain, clean vector-inspired shapes, bold graphic contrast. "
-        "Composition: deliberate, spacious, generous negative space guiding the eye. Striking geometric arrangement or flowing organic forms. "
-        "Palette: 2-6 harmonious colors with one strong accent. Dramatic light/dark, warm/cool, or saturated/muted contrast. "
-        "Feel: modern editorial illustration + minimalist poster + fine-art printmaking. Handcrafted, iconic, timeless. "
-        "STRICT: DO NOT render any text, letters, words, numbers, or title on the image. Pure imagery only. "
-        "Portrait 2:3 aspect ratio."
+        f"Pastel editorial book cover illustration. Reading title: '{doc.get('title', '')}'. "
+        f"Core theme (must be visually referenced): {prompt_seed}. "
+        f"Author: {doc.get('author', '')}. "
+        "AESTHETIC: SOFT PASTEL palette — dusty rose, warm cream, sage green, powder blue, muted lavender, gentle peach. "
+        "NO neon, NO saturated primaries, NO harsh contrast. Gentle luminous washes, dreamlike, calm. "
+        "STYLE: conceptual editorial illustration with one dominant symbolic metaphor that captures the theme above (not generic imagery). "
+        "Soft painterly texture (grain like risograph print), flat but layered forms, elegant silhouettes and stylized simplified shapes. "
+        "Generous negative space, spacious composition guiding the eye to one central subject. "
+        "NO photorealism, NO 3D rendering, NO lens flares, NO sharp digital gradients, NO glossy CGI, NO hard edges. "
+        "Think: modern Penguin Classics, muted Wes Anderson palettes, Riso print poster art, quiet editorial magazine illustration. "
+        "STRICTLY: no text, no letters, no words, no numbers on the image. Pure imagery only. Portrait 2:3 aspect ratio."
     )
     try:
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
             session_id=f"cover-{reading_id}-{uuid.uuid4().hex[:6]}",
-            system_message="You are a master editorial illustrator producing conceptual book covers.",
+            system_message="You are a master editorial illustrator producing soft pastel conceptual book covers.",
         )
-        # Try OpenAI GPT Image 1 first (user prefers), fall back to Gemini
         image_bytes = None
         mime = "image/png"
+        # OpenAI's current image generation model (branded as GPT image; latest gpt-image-1)
         try:
             chat.with_model("openai", "gpt-image-1").with_params(modalities=["image", "text"])
             _, images = await chat.send_message_multimodal_response(UserMessage(text=art_prompt))
@@ -663,6 +659,47 @@ async def activity():
         "due_reviews": due_count,
         "recent": recent,
     }
+
+
+@api_router.post("/readings/{reading_id}/highlights/suggest")
+async def suggest_highlights(reading_id: str):
+    doc = await db.readings.find_one({"id": reading_id, "user_id": DEFAULT_USER})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Not found")
+    text = doc.get("pdf_text") or ""
+    if not text:
+        raise HTTPException(status_code=400, detail="No text available")
+    prompt = (
+        "From this reading, extract the 4 MOST IMPORTANT insights — the holy-grail conclusions, the ideas the reader "
+        "would regret forgetting. Each must be:\n"
+        "- ONE punchy sentence (max 25 words)\n"
+        "- A concrete insight or conclusion, NOT a description of the reading\n"
+        "- Standalone (understandable without extra context)\n"
+        "- Something worth memorizing verbatim\n\n"
+        "Return ONLY a JSON array of 4 strings: [\"insight 1\", \"insight 2\", \"insight 3\", \"insight 4\"].\n\n"
+        f"READING:\n{text[:18000]}"
+    )
+    raw = await call_claude(
+        "You extract the most important, memorable insights from readings as pure JSON.",
+        prompt, f"suggest-highlights-{reading_id}",
+    )
+    items = parse_json_block(raw) or []
+    if not isinstance(items, list):
+        items = []
+    return [str(i)[:400] for i in items[:6] if i]
+
+
+@api_router.get("/tags/all")
+async def all_tags():
+    """Distinct tags across all readings."""
+    readings = await db.readings.find({"user_id": DEFAULT_USER}, {"_id": 0, "tags": 1}).to_list(5000)
+    seen = {}
+    for r in readings:
+        for t in (r.get("tags") or []):
+            key = t.get("name")
+            if key and key not in seen:
+                seen[key] = t
+    return list(seen.values())
 
 
 @api_router.get("/recap/{year}/{month}")

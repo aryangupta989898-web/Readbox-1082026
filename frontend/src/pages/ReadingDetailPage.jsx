@@ -7,6 +7,7 @@ import {
     createHighlight, fetchHighlights, deleteHighlight,
     generateQuiz, fetchQuiz,
     updateTags, generateCover,
+    suggestHighlights,
 } from "../lib/api";
 import { Cover } from "../components/Cover";
 import { StarRating } from "../components/StarRating";
@@ -32,6 +33,21 @@ export const ReadingDetailPage = () => {
     const [quizAnswers, setQuizAnswers] = useState({});
     const [quizSubmitted, setQuizSubmitted] = useState(false);
     const [coverBusy, setCoverBusy] = useState(false);
+    const [suggestions, setSuggestions] = useState([]);
+    const [suggestBusy, setSuggestBusy] = useState(false);
+
+    const runSuggest = async () => {
+        setSuggestBusy(true);
+        try { const s = await suggestHighlights(id); setSuggestions(s); toast.success(`${s.length} insights extracted`); }
+        catch (e) { toast.error(e?.response?.data?.detail || "Failed"); }
+        finally { setSuggestBusy(false); }
+    };
+    const saveSuggestion = async (text) => {
+        const h = await createHighlight(id, { text });
+        setHighlights([...highlights, h]);
+        setSuggestions(suggestions.filter((s) => s !== text));
+        toast.success("Saved");
+    };
 
     const genCover = async () => {
         setCoverBusy(true);
@@ -207,8 +223,28 @@ export const ReadingDetailPage = () => {
 
                     <TabsContent value="highlights" className="mt-6">
                         <div className="bg-[#1B2228] border border-[#2C3440] rounded-lg p-6" data-testid="highlights-panel">
-                            <div className="label-tag mb-1">My Highlights</div>
+                            <div className="flex items-center justify-between mb-1">
+                                <div className="label-tag">My Highlights</div>
+                                <Button onClick={runSuggest} disabled={suggestBusy} size="sm" variant="outline" className="border-[#FF8000]/50 bg-transparent text-[#FF8000] hover:bg-[#FF8000]/10" data-testid="suggest-highlights-btn">
+                                    <Sparkle size={12} className="mr-1" />{suggestBusy ? "Extracting..." : "Suggest 4 Key Insights"}
+                                </Button>
+                            </div>
                             <div className="text-xs text-[#99AABB] mb-4">Add quotes/insights to review via spaced repetition.</div>
+
+                            {suggestions.length > 0 && (
+                                <div className="mb-4 space-y-2" data-testid="suggested-highlights">
+                                    <div className="label-tag text-[#FF8000]">AI-Extracted Holy-Grail Insights</div>
+                                    {suggestions.map((s, i) => (
+                                        <div key={i} className="flex items-start justify-between gap-3 p-3 rounded border-l-2 border-[#FFB800] bg-[#FFB800]/5" data-testid={`suggestion-${i}`}>
+                                            <div className="text-sm text-[#c8d3de] italic flex-1">"{s}"</div>
+                                            <Button size="sm" onClick={() => saveSuggestion(s)} className="bg-[#00E054] text-[#14181C] hover:bg-[#00c94a] shrink-0" data-testid={`save-suggestion-${i}`}>
+                                                <Plus size={12} className="mr-1" />Save
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
                             <div className="flex gap-2 mb-4">
                                 <Textarea value={newHighlight} onChange={(e) => setNewHighlight(e.target.value)} placeholder="Add a highlight..." className="bg-[#14181C] border-[#2C3440] flex-1" data-testid="new-highlight-input" />
                                 <Button onClick={addHighlight} className="bg-[#FF8000] text-white hover:bg-[#e67300]" data-testid="add-highlight-btn"><Plus size={14}/></Button>
