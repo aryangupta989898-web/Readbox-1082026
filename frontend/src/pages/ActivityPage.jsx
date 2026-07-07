@@ -37,7 +37,7 @@ export const ActivityPage = ({ onLog }) => {
                 {(data?.recent || []).map((r) => (
                     <div key={r.id} className="cursor-pointer" onClick={() => nav(`/readings/${r.id}`)} data-testid={`recent-reading-${r.id}`}>
                         <div className="cover-hover">
-                            <Cover title={r.title} color={r.cover_color} size="md" className="w-full h-auto aspect-[2/3]" />
+                            <Cover reading={r} title={r.title} color={r.cover_color} size="md" className="w-full h-auto aspect-[2/3]" />
                         </div>
                         <div className="mt-2 flex justify-center">
                             <StarRating value={r.rating || 0} readOnly size={12} testId={`recent-rating-${r.id}`} />

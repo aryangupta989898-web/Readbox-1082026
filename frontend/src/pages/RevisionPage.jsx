@@ -102,7 +102,7 @@ const QuizzesList = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-testid="quizzes-list">
             {readings.map((r) => (
                 <div key={r.id} className="cursor-pointer" onClick={() => nav(`/readings/${r.id}?tab=quiz`)} data-testid={`quiz-card-${r.id}`}>
-                    <div className="cover-hover"><Cover title={r.title} color={r.cover_color} size="md" className="w-full h-auto aspect-[2/3]" /></div>
+                    <div className="cover-hover"><Cover reading={r} title={r.title} color={r.cover_color} size="md" className="w-full h-auto aspect-[2/3]" /></div>
                     <div className="mt-2 text-sm font-medium truncate">{r.title}</div>
                     <div className="text-xs text-[#99AABB]">{r.highlight_count} highlights</div>
                 </div>

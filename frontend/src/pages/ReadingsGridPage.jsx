@@ -29,7 +29,7 @@ export const ReadingsGridPage = () => {
                         data-testid={`grid-reading-${r.id}`}
                     >
                         <div className="cover-hover">
-                            <Cover title={r.title} color={r.cover_color} className="w-full h-auto aspect-[2/3]" size="md" />
+                            <Cover reading={r} title={r.title} color={r.cover_color} className="w-full h-auto aspect-[2/3]" size="md" />
                         </div>
                         <div className="mt-2 flex justify-center">
                             <StarRating value={r.rating || 0} readOnly size={12} testId={`grid-rating-${r.id}`} />

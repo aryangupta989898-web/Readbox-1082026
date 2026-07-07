@@ -8,6 +8,7 @@ import io
 import json
 import re
 import uuid
+import base64
 import requests
 from pathlib import Path
 from pydantic import BaseModel, Field
@@ -106,6 +107,10 @@ class QuizAnswer(BaseModel):
 
 class ReviewGrade(BaseModel):
     grade: int  # 0..3: again, hard, good, easy
+
+
+class TagUpdate(BaseModel):
+    tags: List[dict]  # [{name, color, icon}]
 
 
 # ============ Helpers ============
@@ -220,18 +225,36 @@ async def create_reading(
 
     await db.readings.insert_one(reading)
 
-    # Generate synopsis in background-ish (await synchronously here for simplicity)
+    # Generate synopsis + author in one call to save budget
     if pdf_text:
         try:
-            synopsis = await call_claude(
-                "You are an expert reader who writes concise, insightful synopses of reading materials. Output ONLY the synopsis text, no preamble.",
-                f"Write a 3-5 sentence synopsis capturing the core thesis and key takeaways of this reading:\n\n{pdf_text[:15000]}",
-                f"synopsis-{reading_id}",
+            raw = await call_claude(
+                "You analyze reading materials. Return ONLY valid JSON.",
+                (
+                    "Given this reading, return JSON: {\"author\": \"detected author or empty string\", "
+                    "\"title_suggestion\": \"clean title or empty\", "
+                    "\"synopsis\": \"3-5 sentence engaging synopsis capturing core thesis\", "
+                    "\"cover_prompt\": \"one-line artistic painted book-cover-style visual prompt (no text on cover), evocative and thematic\"}\n\n"
+                    f"READING:\n{pdf_text[:15000]}"
+                ),
+                f"analyze-{reading_id}",
             )
-            await db.readings.update_one({"id": reading_id}, {"$set": {"synopsis": synopsis.strip()}})
-            reading["synopsis"] = synopsis.strip()
+            data = parse_json_block(raw) or {}
+            update = {}
+            if isinstance(data, dict):
+                if data.get("synopsis"):
+                    update["synopsis"] = data["synopsis"].strip()
+                if data.get("author") and not author:
+                    update["author"] = data["author"].strip()
+                if data.get("title_suggestion") and not title:
+                    update["title"] = data["title_suggestion"].strip()
+                if data.get("cover_prompt"):
+                    update["cover_prompt"] = data["cover_prompt"].strip()
+            if update:
+                await db.readings.update_one({"id": reading_id}, {"$set": update})
+                reading.update(update)
         except Exception as e:
-            logger.error(f"Synopsis generation failed: {e}")
+            logger.error(f"Analysis failed: {e}")
 
     return strip_id(reading)
 
@@ -353,13 +376,20 @@ async def generate_notes(reading_id: str):
 
     topics = "\n".join(f"- {c['topic']}: {c.get('description','')}" for c in checked)
     prompt = (
-        "Given the reading and the selected topics, write detailed, engaging summary notes covering ONLY those topics. "
-        "Structure with markdown headings per topic. Use bullet points, examples, and key insights.\n\n"
-        f"SELECTED TOPICS:\n{topics}\n\n"
-        f"READING:\n{(doc.get('pdf_text') or '')[:18000]}"
+        "Write a comprehensive, engaging ESSAY (NOT bullet points, NOT lists) that weaves together the reader's selected topics "
+        "into a smooth, cohesive narrative. Rules:\n"
+        "1. Pure flowing prose in 4-7 paragraphs. NO bullet points, NO numbered lists, NO markdown lists.\n"
+        "2. Cover EVERY selected topic thoroughly, but connect them so ideas flow naturally.\n"
+        "3. Explain concepts in your own words — do NOT quote verbatim. Make it accessible even 8 months later.\n"
+        "4. Include 2-3 rhetorical questions placed thoughtfully to force active reading.\n"
+        "5. Use relatable analogies and vivid examples. Make it interesting, not academic.\n"
+        "6. Precise and succinct — no filler. Every sentence earns its place.\n"
+        "7. Use `## Title` for the essay title only (one line). Rest is prose paragraphs separated by blank lines.\n\n"
+        f"SELECTED TOPICS TO WEAVE TOGETHER:\n{topics}\n\n"
+        f"SOURCE READING:\n{(doc.get('pdf_text') or '')[:18000]}"
     )
     notes_text = await call_claude(
-        "You are a scholarly note-taker producing crisp, well-structured summary notes in markdown.",
+        "You are a masterful essayist who transforms academic topics into vivid, flowing prose that hooks readers and lingers in memory. Write in essay form only — never bullet points.",
         prompt,
         f"notes-{reading_id}",
     )
@@ -520,6 +550,79 @@ async def generate_quiz(reading_id: str):
 async def get_quiz(reading_id: str):
     doc = await db.quizzes.find_one({"reading_id": reading_id}, {"_id": 0})
     return doc or None
+
+
+# ============ Tags ============
+@api_router.patch("/readings/{reading_id}/tags")
+async def update_tags(reading_id: str, upd: TagUpdate):
+    # Sanitize tags
+    clean = []
+    for t in upd.tags[:20]:
+        if not isinstance(t, dict):
+            continue
+        name = str(t.get("name", "")).strip()[:40]
+        if not name:
+            continue
+        clean.append({
+            "name": name,
+            "color": str(t.get("color", "#00E054"))[:20],
+            "icon": str(t.get("icon", "Tag"))[:40],
+        })
+    await db.readings.update_one(
+        {"id": reading_id, "user_id": DEFAULT_USER},
+        {"$set": {"tags": clean, "updated_at": now_iso()}},
+    )
+    return {"tags": clean}
+
+
+# ============ Cover Art Generation ============
+@api_router.post("/readings/{reading_id}/cover/generate")
+async def generate_cover(reading_id: str):
+    doc = await db.readings.find_one({"id": reading_id, "user_id": DEFAULT_USER})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    # Build prompt
+    prompt_seed = doc.get("cover_prompt") or f"Book about {doc.get('title', 'a topic')}"
+    art_prompt = (
+        f"Artistic painted book cover art for a reading titled '{doc.get('title', '')}'. "
+        f"Theme: {prompt_seed}. "
+        "Style: painterly, evocative, thematic illustration in the vein of Life of Pi, The Old Man and the Sea, "
+        "or Penguin Classics covers. Rich color palette, atmospheric. NO TEXT, NO WORDS, NO LETTERS on the image. "
+        "Portrait 2:3 aspect ratio. Beautiful and artistic."
+    )
+    try:
+        chat = LlmChat(
+            api_key=EMERGENT_LLM_KEY,
+            session_id=f"cover-{reading_id}",
+            system_message="You generate artistic book cover imagery.",
+        )
+        chat.with_model("gemini", "gemini-3.1-flash-image-preview").with_params(modalities=["image", "text"])
+        _, images = await chat.send_message_multimodal_response(UserMessage(text=art_prompt))
+        if not images:
+            raise HTTPException(status_code=500, detail="No image generated")
+        img = images[0]
+        image_bytes = base64.b64decode(img["data"])
+        mime = img.get("mime_type", "image/png")
+        ext = "png" if "png" in mime else "jpg"
+        path = f"{APP_NAME}/covers/{DEFAULT_USER}/{reading_id}.{ext}"
+        result = put_object(path, image_bytes, mime)
+        await db.readings.update_one({"id": reading_id}, {"$set": {"cover_image_path": result["path"], "cover_mime": mime}})
+        return {"cover_image_path": result["path"]}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Cover gen failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_router.get("/readings/{reading_id}/cover")
+async def get_cover(reading_id: str):
+    doc = await db.readings.find_one({"id": reading_id, "user_id": DEFAULT_USER})
+    if not doc or not doc.get("cover_image_path"):
+        raise HTTPException(status_code=404, detail="No cover")
+    data, ct = get_object(doc["cover_image_path"])
+    return Response(content=data, media_type=doc.get("cover_mime") or ct)
 
 
 # ============ Activity/Stats ============

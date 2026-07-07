@@ -6,14 +6,16 @@ import {
     generateNotes, fetchNotes,
     createHighlight, fetchHighlights, deleteHighlight,
     generateQuiz, fetchQuiz,
+    updateTags, generateCover,
 } from "../lib/api";
 import { Cover } from "../components/Cover";
 import { StarRating } from "../components/StarRating";
+import { TagsPicker } from "../components/TagsPicker";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { Checkbox } from "../components/ui/checkbox";
 import { Textarea } from "../components/ui/textarea";
 import { Button } from "../components/ui/button";
-import { Heart, Trash, ArrowLeft, Sparkle, Plus } from "@phosphor-icons/react";
+import { Heart, Trash, ArrowLeft, Sparkle, Plus, Image as ImageIcon } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 export const ReadingDetailPage = () => {
@@ -29,6 +31,19 @@ export const ReadingDetailPage = () => {
     const [review, setReview] = useState("");
     const [quizAnswers, setQuizAnswers] = useState({});
     const [quizSubmitted, setQuizSubmitted] = useState(false);
+    const [coverBusy, setCoverBusy] = useState(false);
+
+    const genCover = async () => {
+        setCoverBusy(true);
+        try { await generateCover(id); await load(); toast.success("Cover generated"); }
+        catch { toast.error("Cover generation failed"); }
+        finally { setCoverBusy(false); }
+    };
+
+    const setTags = async (tags) => {
+        try { await updateTags(id, tags); setReading({ ...reading, tags }); }
+        catch { toast.error("Failed to save tags"); }
+    };
 
     const load = async () => {
         const r = await fetchReading(id);
@@ -82,12 +97,27 @@ export const ReadingDetailPage = () => {
             {/* Hero */}
             <div className="relative overflow-hidden" style={{ background: `linear-gradient(180deg, ${reading.cover_color}22 0%, #14181C 100%)` }}>
                 <div className="max-w-5xl mx-auto px-6 py-12 grid grid-cols-[auto_1fr] gap-8">
-                    <Cover title={reading.title} color={reading.cover_color} size="xl" />
+                    <div className="flex flex-col items-center gap-3">
+                        <Cover reading={reading} title={reading.title} color={reading.cover_color} size="xl" />
+                        <Button
+                            onClick={genCover}
+                            disabled={coverBusy}
+                            variant="outline"
+                            className="border-[#2C3440] bg-transparent text-white hover:bg-[#2C3440] text-xs w-48"
+                            data-testid="gen-cover-btn"
+                        >
+                            <ImageIcon size={14} className="mr-1" />
+                            {coverBusy ? "Generating..." : reading.cover_image_path ? "Regenerate Cover" : "Generate Cover"}
+                        </Button>
+                    </div>
                     <div>
                         <button onClick={() => nav(-1)} className="text-xs text-[#99AABB] hover:text-white flex items-center gap-1 mb-4" data-testid="back-btn"><ArrowLeft size={14}/>Back</button>
                         <div className="label-tag mb-2">Reading Log · {reading.read_date}</div>
                         <h1 className="font-heading text-4xl font-bold mb-2">{reading.title}</h1>
                         {reading.author && <div className="text-[#99AABB] mb-4">by {reading.author}</div>}
+                        <div className="mb-4">
+                            <TagsPicker tags={reading.tags || []} onChange={setTags} />
+                        </div>
                         <div className="flex items-center gap-4 mb-6">
                             <StarRating value={reading.rating || 0} onChange={(v) => patch({ rating: v })} size={22} testId="detail-rating" />
                             <button onClick={() => patch({ liked: !reading.liked })} className="transition-transform hover:scale-110" data-testid="like-btn">
@@ -257,15 +287,42 @@ export const ReadingDetailPage = () => {
 };
 
 const NotesRenderer = ({ content }) => {
-    // very light markdown rendering
-    const html = content
-        .replace(/^### (.*)$/gm, '<h3>$1</h3>')
-        .replace(/^## (.*)$/gm, '<h2>$1</h2>')
-        .replace(/^# (.*)$/gm, '<h1>$1</h1>')
-        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-        .replace(/^\s*[-*] (.*)$/gm, '<li>$1</li>')
-        .replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>')
-        .replace(/\n\n/g, '</p><p>')
-        .replace(/^(?!<)(.+)$/gm, (m) => m.startsWith('<') ? m : `<p>${m}</p>`);
-    return <div className="markdown-body" data-testid="notes-content" dangerouslySetInnerHTML={{ __html: html }} />;
+    // Essay-style rendering: paragraphs, italic rhetorical questions, drop cap on first paragraph
+    const lines = content.split(/\n+/).filter(Boolean);
+    let title = null;
+    const paragraphs = [];
+    lines.forEach((l) => {
+        const t = l.trim();
+        if (t.startsWith("## ") && !title) { title = t.replace(/^##\s*/, ""); return; }
+        if (t.startsWith("# ") && !title) { title = t.replace(/^#\s*/, ""); return; }
+        if (t.startsWith("#")) { title = t.replace(/^#+\s*/, ""); return; }
+        paragraphs.push(t.replace(/^[-*]\s+/, ""));  // strip stray bullets
+    });
+
+    const renderPara = (text, idx) => {
+        // Detect rhetorical questions and italicize them
+        const parts = text.split(/(?<=[?!])\s+/);
+        return (
+            <p key={idx} className={`text-[#c8d3de] leading-[1.85] text-[15px] ${idx === 0 ? "first-letter:text-5xl first-letter:font-heading first-letter:font-bold first-letter:mr-2 first-letter:float-left first-letter:leading-[0.9] first-letter:text-[#00E054]" : ""}`}>
+                {parts.map((p, i) => {
+                    if (p.trim().endsWith("?")) {
+                        return <span key={i} className="italic text-[#40BCF4]">{p} </span>;
+                    }
+                    // bold **text**
+                    const bolded = p.split(/(\*\*[^*]+\*\*)/g).map((seg, j) => {
+                        if (seg.startsWith("**") && seg.endsWith("**")) return <strong key={j} className="text-white">{seg.slice(2, -2)}</strong>;
+                        return <span key={j}>{seg}</span>;
+                    });
+                    return <span key={i}>{bolded} </span>;
+                })}
+            </p>
+        );
+    };
+
+    return (
+        <div className="prose-essay space-y-5" data-testid="notes-content">
+            {title && <h2 className="font-heading text-3xl font-bold text-white mb-2">{title}</h2>}
+            {paragraphs.map(renderPara)}
+        </div>
+    );
 };

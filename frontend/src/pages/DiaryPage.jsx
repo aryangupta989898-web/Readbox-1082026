@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { fetchReadings } from "../lib/api";
 import { Cover } from "../components/Cover";
 import { StarRating } from "../components/StarRating";
+import { TagChip } from "../components/TagsPicker";
 import { Heart, PencilSimple } from "@phosphor-icons/react";
 
 const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
@@ -69,10 +70,15 @@ export const DiaryPage = () => {
                         </div>
                         <div className="font-heading text-xl text-[#99AABB]">{String(r._date.getDate()).padStart(2, "0")}</div>
                         <div className="flex items-center gap-3 min-w-0">
-                            <Cover title={r.title} color={r.cover_color} size="xs" />
+                            <Cover reading={r} title={r.title} color={r.cover_color} size="xs" />
                             <div className="min-w-0">
                                 <div className="font-heading font-bold truncate">{r.title}</div>
                                 {r.author && <div className="text-xs text-[#667788] truncate">{r.author}</div>}
+                                {r.tags && r.tags.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 mt-1">
+                                        {r.tags.slice(0, 3).map((t, i) => <TagChip key={i} tag={t} />)}
+                                    </div>
+                                )}
                             </div>
                         </div>
                         <div className="text-sm text-[#99AABB]">{r._date.getFullYear()}</div>

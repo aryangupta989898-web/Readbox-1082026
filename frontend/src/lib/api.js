@@ -32,3 +32,7 @@ export const fetchQuiz = (id) => api.get(`/readings/${id}/quiz`).then((r) => r.d
 export const fetchDueHighlights = () => api.get(`/revision/due`).then((r) => r.data);
 export const fetchRevisionReadings = () => api.get(`/revision/readings`).then((r) => r.data);
 export const reviewHighlight = (id, grade) => api.post(`/highlights/${id}/review`, { grade }).then((r) => r.data);
+
+export const updateTags = (id, tags) => api.patch(`/readings/${id}/tags`, { tags }).then((r) => r.data);
+export const generateCover = (id) => api.post(`/readings/${id}/cover/generate`).then((r) => r.data);
+export const coverUrl = (id) => `${API}/readings/${id}/cover`;
