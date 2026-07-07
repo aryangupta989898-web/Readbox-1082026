@@ -31,6 +31,13 @@ export const Cover = ({ reading, title, color = "#00E054", size = "md", classNam
                     className="w-full h-full object-cover"
                     loading="lazy"
                 />
+                {size !== "xs" && (
+                    <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/95 via-black/70 to-transparent">
+                        <div className="font-heading font-bold text-white text-xs sm:text-sm leading-tight line-clamp-3 drop-shadow-lg" style={{textShadow: '0 2px 6px rgba(0,0,0,0.9)'}}>
+                            {displayTitle}
+                        </div>
+                    </div>
+                )}
             </div>
         );
     }

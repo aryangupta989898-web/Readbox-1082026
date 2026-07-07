@@ -28,7 +28,7 @@ export const ReadingsGridPage = () => {
 
             <FilterBar search={search} setSearch={setSearch} tag={tag} setTag={setTag} readings={readings} />
 
-            <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10 gap-3">
                 {filtered.map((r, i) => (
                     <motion.div
                         key={r.id}
@@ -50,7 +50,7 @@ export const ReadingsGridPage = () => {
                     </motion.div>
                 ))}
                 {filtered.length === 0 && (
-                    <div className="col-span-6 py-24 text-center border border-dashed border-[#2C3440] rounded-lg text-[#99AABB]">
+                    <div className="col-span-full py-24 text-center border border-dashed border-[#2C3440] rounded-lg text-[#99AABB]">
                         {readings.length ? "No matches." : "No readings yet. Log your first one!"}
                     </div>
                 )}

@@ -376,20 +376,22 @@ async def generate_notes(reading_id: str):
 
     topics = "\n".join(f"- {c['topic']}: {c.get('description','')}" for c in checked)
     prompt = (
-        "Write a comprehensive, engaging ESSAY (NOT bullet points, NOT lists) that weaves together the reader's selected topics "
-        "into a smooth, cohesive narrative. Rules:\n"
-        "1. Pure flowing prose in 4-7 paragraphs. NO bullet points, NO numbered lists, NO markdown lists.\n"
-        "2. Cover EVERY selected topic thoroughly, but connect them so ideas flow naturally.\n"
-        "3. Explain concepts in your own words — do NOT quote verbatim. Make it accessible even 8 months later.\n"
-        "4. Include 2-3 rhetorical questions placed thoughtfully to force active reading.\n"
-        "5. Use relatable analogies and vivid examples. Make it interesting, not academic.\n"
-        "6. Precise and succinct — no filler. Every sentence earns its place.\n"
-        "7. Use `## Title` for the essay title only (one line). Rest is prose paragraphs separated by blank lines.\n\n"
-        f"SELECTED TOPICS TO WEAVE TOGETHER:\n{topics}\n\n"
-        f"SOURCE READING:\n{(doc.get('pdf_text') or '')[:18000]}"
+        "Write COMPREHENSION NOTES as a flowing essay. These notes must be so good that if the reader reads them 2 YEARS LATER "
+        "with no other context, they'll fully grasp the gist and main ideas of what they cared about. Rules:\n"
+        "1. Pure prose paragraphs. NO bullet points, NO numbered lists, NO markdown lists.\n"
+        "2. Cover EVERY selected topic — do not skip any. Weave them together so ideas flow and connect.\n"
+        "3. Focus on the GIST and MAIN IDEAS behind each topic — the WHY and the SO-WHAT, not just definitions.\n"
+        "4. Do NOT reiterate what's said verbatim. Explain the underlying insight in your own words, with concrete examples from the reading where useful.\n"
+        "5. Include 2-3 rhetorical questions placed thoughtfully to force active reading.\n"
+        "6. Use relatable analogies. Precise, succinct, memorable. Every sentence earns its place.\n"
+        "7. Structure: `## Essay Title` (one line), then 4-7 tight prose paragraphs separated by blank lines. "
+        "Each paragraph should center on a cluster of the selected topics, not a single one, so ideas link naturally.\n"
+        "8. Aim for 500-800 words total — dense with insight, no filler.\n\n"
+        f"SELECTED TOPICS THE READER CARED ABOUT (COVER ALL OF THEM):\n{topics}\n\n"
+        f"SOURCE READING (extract the gist behind each topic from this):\n{(doc.get('pdf_text') or '')[:20000]}"
     )
     notes_text = await call_claude(
-        "You are a masterful essayist who transforms academic topics into vivid, flowing prose that hooks readers and lingers in memory. Write in essay form only — never bullet points.",
+        "You are a masterful essayist who distills complex readings into vivid, flowing prose that captures the underlying insight and remains crystal clear years later. Never use bullet points.",
         prompt,
         f"notes-{reading_id}",
     )
@@ -585,25 +587,47 @@ async def generate_cover(reading_id: str):
     # Build prompt
     prompt_seed = doc.get("cover_prompt") or f"Book about {doc.get('title', 'a topic')}"
     art_prompt = (
-        f"Artistic painted book cover art for a reading titled '{doc.get('title', '')}'. "
-        f"Theme: {prompt_seed}. "
-        "Style: painterly, evocative, thematic illustration in the vein of Life of Pi, The Old Man and the Sea, "
-        "or Penguin Classics covers. Rich color palette, atmospheric. NO TEXT, NO WORDS, NO LETTERS on the image. "
-        "Portrait 2:3 aspect ratio. Beautiful and artistic."
+        f"Editorial book cover illustration for a reading titled '{doc.get('title', '')}'. "
+        f"Core theme to communicate: {prompt_seed}. "
+        f"Author context: {doc.get('author', '')}. "
+        "STYLE: Conceptual editorial illustration — symbolism, negative space, ONE unforgettable visual metaphor "
+        "that captures the emotional and philosophical core of THIS SPECIFIC SUBJECT MATTER. "
+        "The metaphor MUST be directly relevant to the actual theme above — no generic 'person by the sea' unless the reading is about that. "
+        "For business/finance/economics readings use abstract capital-flow, geometric market, or industrial metaphors. "
+        "For philosophy use minimal isolated forms. For science use elegant diagrams as art. "
+        "Simplified silhouettes, stylized forms, minimal facial detail. NO photorealism, NO 3D, NO lens flares. "
+        "Flat colors with subtle painterly grain, clean vector-inspired shapes, bold graphic contrast. "
+        "Composition: deliberate, spacious, generous negative space guiding the eye. Striking geometric arrangement or flowing organic forms. "
+        "Palette: 2-6 harmonious colors with one strong accent. Dramatic light/dark, warm/cool, or saturated/muted contrast. "
+        "Feel: modern editorial illustration + minimalist poster + fine-art printmaking. Handcrafted, iconic, timeless. "
+        "STRICT: DO NOT render any text, letters, words, numbers, or title on the image. Pure imagery only. "
+        "Portrait 2:3 aspect ratio."
     )
     try:
         chat = LlmChat(
             api_key=EMERGENT_LLM_KEY,
-            session_id=f"cover-{reading_id}",
-            system_message="You generate artistic book cover imagery.",
+            session_id=f"cover-{reading_id}-{uuid.uuid4().hex[:6]}",
+            system_message="You are a master editorial illustrator producing conceptual book covers.",
         )
-        chat.with_model("gemini", "gemini-3.1-flash-image-preview").with_params(modalities=["image", "text"])
-        _, images = await chat.send_message_multimodal_response(UserMessage(text=art_prompt))
-        if not images:
-            raise HTTPException(status_code=500, detail="No image generated")
-        img = images[0]
-        image_bytes = base64.b64decode(img["data"])
-        mime = img.get("mime_type", "image/png")
+        # Try OpenAI GPT Image 1 first (user prefers), fall back to Gemini
+        image_bytes = None
+        mime = "image/png"
+        try:
+            chat.with_model("openai", "gpt-image-1").with_params(modalities=["image", "text"])
+            _, images = await chat.send_message_multimodal_response(UserMessage(text=art_prompt))
+            if images:
+                image_bytes = base64.b64decode(images[0]["data"])
+                mime = images[0].get("mime_type", "image/png")
+        except Exception as e:
+            logger.warning(f"OpenAI cover gen fallback: {e}")
+        if image_bytes is None:
+            chat2 = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"cover-{reading_id}-fb", system_message="Editorial illustrator.")
+            chat2.with_model("gemini", "gemini-3.1-flash-image-preview").with_params(modalities=["image", "text"])
+            _, images = await chat2.send_message_multimodal_response(UserMessage(text=art_prompt))
+            if not images:
+                raise HTTPException(status_code=500, detail="No image generated")
+            image_bytes = base64.b64decode(images[0]["data"])
+            mime = images[0].get("mime_type", "image/png")
         ext = "png" if "png" in mime else "jpg"
         path = f"{APP_NAME}/covers/{DEFAULT_USER}/{reading_id}.{ext}"
         result = put_object(path, image_bytes, mime)
