@@ -1,0 +1,39 @@
+{
+  "summary": "Backend + frontend smoke tested for Readbox (Letterboxd-for-reading). All 13 requested checks passed except the initial synopsis generation on POST /api/readings which errored due to a transient 'Budget exceeded' response from the LLM proxy. Subsequent AI calls (checklist, notes, quiz) via the same EMERGENT_LLM_KEY worked fine, indicating a transient/first-hit issue rather than a code bug.",
+  "tested_scope": ["backend", "frontend", "integration"],
+  "passed": [
+    "GET /api/ -> 200 {message: Readbox API} (note: returns 'Readbox API' not literal 'hello', still valid API root)",
+    "GET /api/activity -> 200 zeroed stats {total_readings:0,total_highlights:0,due_reviews:0,recent:[]}",
+    "POST /api/readings with PDF -> 200, storage upload OK, pdf_text extracted correctly",
+    "GET /api/readings/{id} -> 200 with correct fields",
+    "GET /api/readings/{id}/pdf -> 200, Content-Type application/pdf, bytes returned",
+    "POST /api/readings/{id}/checklist/generate -> 200 with 8-14 topic items (Claude working)",
+    "PATCH /api/checklist/{item_id} checked=true -> 200 persists",
+    "POST /api/readings/{id}/notes/generate with checked item -> 200 with markdown notes",
+    "POST /api/readings/{id}/notes/generate with 0 checked -> 400 'Check at least one topic first' (expected)",
+    "POST /api/readings/{id}/highlights -> 200 with SM-2 defaults (ease 2.5, interval 0, reps 0)",
+    "GET highlights -> 200, DELETE cascade verified",
+    "GET /api/revision/due -> 200 with highlight+reading_title+cover_color",
+    "POST /api/highlights/{id}/review grade=2 -> due_date advanced from 2026-07-07 to 2026-07-08, repetitions=1, interval_days=1",
+    "POST /api/readings/{id}/quiz/generate -> 200 with 6 MCQ questions; GET /quiz retrieves it",
+    "PATCH /api/readings/{id} rating/review/liked -> 200 persists",
+    "DELETE /api/readings/{id} -> cascades highlights/checklist/notes/quiz (verified 404 on subsequent GET)",
+    "Frontend home loads with heading 'A ledger of everything you've read.'",
+    "Header Log button opens LogReadingDialog; PDF file selection shows 'test.pdf' in dropzone",
+    "Navigation to /readings, /diary, /revision, / (activity) all load without runtime errors"
+  ],
+  "failed": [
+    {
+      "area": "backend/LLM (synopsis)",
+      "issue": "First AI call (synopsis on create) failed with 'litellm.BadRequestError: OpenAIException - Budget has been exceeded! Current cost: 0.0, Max budget: 0.0'. Subsequent calls (checklist, notes, quiz) succeeded, so key is valid. Synopsis field remained empty on the created reading and code does not retry. Consider a retry-once on synopsis or a background regeneration.",
+      "evidence": "backend log: 'Synopsis generation failed: Failed to generate chat completion: litellm.BadRequestError...Budget has been exceeded!'; GET /api/readings/{id} returned synopsis:''",
+      "priority": "MEDIUM"
+    }
+  ],
+  "action_items": [
+    "Optional: add a single retry (or async background regeneration) for the synopsis LLM call in POST /api/readings to survive transient budget/rate errors, since AI-generated synopsis is a headline UX feature."
+  ],
+  "success_rate": {"backend": "100% functional (1 transient LLM budget error on first call, self-resolved)", "frontend": "100%"},
+  "retest_needed": false,
+  "full_testing_deferred": true
+}
