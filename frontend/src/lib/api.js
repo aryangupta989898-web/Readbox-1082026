@@ -36,3 +36,6 @@ export const reviewHighlight = (id, grade) => api.post(`/highlights/${id}/review
 export const updateTags = (id, tags) => api.patch(`/readings/${id}/tags`, { tags }).then((r) => r.data);
 export const generateCover = (id) => api.post(`/readings/${id}/cover/generate`).then((r) => r.data);
 export const coverUrl = (id) => `${API}/readings/${id}/cover`;
+
+export const fetchRecap = (year, month) => api.get(`/recap/${year}/${month}`).then((r) => r.data);
+export const fetchRecapMonths = () => api.get(`/recap/months`).then((r) => r.data);

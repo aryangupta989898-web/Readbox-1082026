@@ -7,8 +7,15 @@ import { DiaryPage } from "./pages/DiaryPage";
 import { ReadingsGridPage } from "./pages/ReadingsGridPage";
 import { ReadingDetailPage } from "./pages/ReadingDetailPage";
 import { RevisionPage } from "./pages/RevisionPage";
+import { RecapPage } from "./pages/RecapPage";
 import { LogReadingDialog } from "./components/LogReadingDialog";
 import { Toaster } from "./components/ui/sonner";
+import { Navigate } from "react-router-dom";
+
+const RecapRedirect = () => {
+    const now = new Date();
+    return <Navigate to={`/recap/${now.getFullYear()}/${now.getMonth() + 1}`} replace />;
+};
 
 function App() {
     const [logOpen, setLogOpen] = useState(false);
@@ -25,6 +32,8 @@ function App() {
                         <Route path="/readings" element={<ReadingsGridPage />} />
                         <Route path="/readings/:id" element={<ReadingDetailPage />} />
                         <Route path="/revision" element={<RevisionPage />} />
+                        <Route path="/recap" element={<RecapRedirect />} />
+                        <Route path="/recap/:year/:month" element={<RecapPage />} />
                     </Routes>
                 </main>
                 <LogReadingDialog

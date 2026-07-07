@@ -8,6 +8,7 @@ const links = [
     { to: "/readings", label: "Readings" },
     { to: "/diary", label: "Diary" },
     { to: "/revision", label: "Revision" },
+    { to: "/recap", label: "Recap" },
 ];
 
 export const NavBar = ({ onLog }) => {

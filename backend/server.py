@@ -641,6 +641,67 @@ async def activity():
     }
 
 
+@api_router.get("/recap/{year}/{month}")
+async def monthly_recap(year: int, month: int):
+    prefix = f"{year:04d}-{month:02d}"
+    readings = await db.readings.find(
+        {"user_id": DEFAULT_USER, "read_date": {"$regex": f"^{prefix}"}},
+        {"_id": 0, "pdf_text": 0},
+    ).to_list(1000)
+    reading_ids = [r["id"] for r in readings]
+    highlights = await db.highlights.find({"reading_id": {"$in": reading_ids}}, {"_id": 0}).to_list(2000)
+
+    tag_counts = {}
+    tag_meta = {}
+    for r in readings:
+        for t in (r.get("tags") or []):
+            key = t.get("name")
+            if not key:
+                continue
+            tag_counts[key] = tag_counts.get(key, 0) + 1
+            tag_meta[key] = t
+    top_tags = [
+        {**tag_meta[name], "count": count}
+        for name, count in sorted(tag_counts.items(), key=lambda x: -x[1])[:6]
+    ]
+
+    top_readings = sorted(
+        [r for r in readings if r.get("rating")],
+        key=lambda r: (-(r.get("rating") or 0), r.get("read_date") or ""),
+    )[:3]
+
+    # Streak: count unique days read this month
+    unique_days = len({r.get("read_date") for r in readings if r.get("read_date")})
+
+    top_highlights = highlights[:3]
+    rmap = {r["id"]: r for r in readings}
+    for h in top_highlights:
+        h["reading_title"] = rmap.get(h["reading_id"], {}).get("title", "")
+
+    return {
+        "year": year,
+        "month": month,
+        "total_readings": len(readings),
+        "total_highlights": len(highlights),
+        "unique_days": unique_days,
+        "top_tags": top_tags,
+        "top_readings": top_readings,
+        "top_highlights": top_highlights,
+        "readings": readings,
+    }
+
+
+@api_router.get("/recap/months")
+async def recap_months():
+    """List months that have readings."""
+    readings = await db.readings.find(
+        {"user_id": DEFAULT_USER},
+        {"_id": 0, "read_date": 1},
+    ).to_list(5000)
+    months = sorted({(r.get("read_date") or "")[:7] for r in readings if r.get("read_date")}, reverse=True)
+    return [m for m in months if m]
+
+
 @api_router.get("/")
 async def root():
     return {"message": "Readbox API"}
