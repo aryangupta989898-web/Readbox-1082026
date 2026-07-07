@@ -5,7 +5,7 @@ import { BookOpen, Plus } from "@phosphor-icons/react";
 import { Button } from "./ui/button";
 
 const links = [
-    { to: "/", label: "Activity", end: true },
+    { to: "/", label: "Home", end: true },
     { to: "/readings", label: "Readings" },
     { to: "/diary", label: "Diary" },
     { to: "/revision", label: "Revision" },
