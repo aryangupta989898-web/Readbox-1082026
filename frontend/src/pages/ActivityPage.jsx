@@ -96,11 +96,11 @@ export const ActivityPage = ({ onLog }) => {
                 </p>
             </div>
 
-            {/* Stats — same treatment as before */}
-            <div className="grid grid-cols-3 gap-4 mb-14">
-                <StatCard icon={<BookOpen size={20} color="#00E054" weight="fill" />} label="Readings" value={data?.total_readings ?? 0} testId="stat-readings" />
-                <StatCard icon={<Highlighter size={20} color="#FF8000" weight="fill" />} label="Highlights" value={data?.total_highlights ?? 0} testId="stat-highlights" />
-                <StatCard icon={<Clock size={20} color="#40BCF4" weight="fill" />} label="Due for revision" value={data?.due_reviews ?? 0} testId="stat-due" />
+            {/* Minimal stats — hairline row */}
+            <div className="grid grid-cols-3 gap-8 mb-14 pb-6 border-b border-[#2C3440]" data-testid="stats-row">
+                <MiniStat label="Readings" value={data?.total_readings ?? 0} testId="stat-readings" />
+                <MiniStat label="Highlights" value={data?.total_highlights ?? 0} testId="stat-highlights" />
+                <MiniStat label="Due for revision" value={data?.due_reviews ?? 0} testId="stat-due" />
             </div>
 
             {/* Themes / tags — subtle inline, no forced trivia */}
@@ -136,34 +136,81 @@ export const ActivityPage = ({ onLog }) => {
                 </section>
             )}
 
-            {/* Rating distribution — subtle bar to fill space */}
+            {/* Rating distribution — compact donut */}
             {data?.total_readings > 0 && (
-                <section className="mb-14" data-testid="rating-distribution">
-                    <div className="label-tag mb-3">Your ratings</div>
-                    <div className="flex items-end gap-2 h-16">
-                        {[5,4,3,2,1].map((star) => {
-                            const count = readings.filter((r) => Math.round(r.rating || 0) === star).length;
-                            const max = Math.max(1, ...[5,4,3,2,1].map((s) => readings.filter((r) => Math.round(r.rating || 0) === s).length));
-                            const h = (count / max) * 100;
-                            return (
-                                <div key={star} className="flex-1 flex flex-col items-center gap-1">
-                                    <div className="w-full flex flex-col justify-end h-12">
-                                        <motion.div
-                                            initial={{ height: 0 }}
-                                            animate={{ height: `${Math.max(4, h)}%` }}
-                                            transition={{ delay: star * 0.05, duration: 0.5 }}
-                                            className="w-full rounded-t"
-                                            style={{ background: `linear-gradient(180deg, #00E054 0%, #007a2f 100%)`, opacity: count ? 1 : 0.2 }}
-                                        />
+                <section className="mb-14 flex items-center gap-8" data-testid="rating-distribution">
+                    <RatingDonut readings={readings} />
+                    <div className="flex-1">
+                        <div className="label-tag mb-2">Your ratings</div>
+                        <div className="space-y-1">
+                            {[5,4,3,2,1].map((star) => {
+                                const count = readings.filter((r) => Math.round(r.rating || 0) === star).length;
+                                const pct = readings.length ? (count / readings.length) * 100 : 0;
+                                return (
+                                    <div key={star} className="flex items-center gap-2 text-xs">
+                                        <span className="text-[#c8ae7d] w-6">{star}★</span>
+                                        <div className="flex-1 h-1 bg-[#2C3440] rounded-full overflow-hidden">
+                                            <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ delay: 0.2 + star*0.05, duration: 0.6 }} className="h-full bg-[#00E054]" />
+                                        </div>
+                                        <span className="text-[#667788] w-6 text-right">{count}</span>
                                     </div>
-                                    <div className="text-[10px] text-[#667788]">{star}★</div>
-                                    <div className="text-[10px] text-white font-heading">{count}</div>
-                                </div>
-                            );
-                        })}
+                                );
+                            })}
+                        </div>
                     </div>
                 </section>
             )}
+
+            {/* Iconic covers auto-carousel — always shown */}
+            <section className="mb-14" data-testid="iconic-shelf">
+                <div className="label-tag mb-3">A few we love</div>
+                <div className="relative overflow-hidden" style={{maskImage:'linear-gradient(90deg, transparent, black 6%, black 94%, transparent)'}}>
+                    <motion.div className="flex gap-5 py-2" animate={{ x: [0, -1400] }} transition={{ duration: 45, repeat: Infinity, ease: "linear" }} style={{ width: "max-content" }}>
+                        {[
+                            "https://customer-assets.emergentagent.com/job_highlightloop/artifacts/cpw7foj2_4375b7d9bf24b88aa53744b417227485.jpg",
+                            "https://customer-assets.emergentagent.com/job_highlightloop/artifacts/wz8qil8k_17a4ae76d33654afe5ed9bbaa36f2561.jpg",
+                            "https://customer-assets.emergentagent.com/job_highlightloop/artifacts/l7b9t6et_0405c45d7c0f56c39dc4baaaca482a71.jpg",
+                            "https://customer-assets.emergentagent.com/job_highlightloop/artifacts/9cv31w7o_d20b291bd20bf99262d4dbdc41ded105.jpg",
+                            "https://customer-assets.emergentagent.com/job_highlightloop/artifacts/a2xxq01x_image.webp",
+                        ].concat([
+                            "https://customer-assets.emergentagent.com/job_highlightloop/artifacts/cpw7foj2_4375b7d9bf24b88aa53744b417227485.jpg",
+                            "https://customer-assets.emergentagent.com/job_highlightloop/artifacts/wz8qil8k_17a4ae76d33654afe5ed9bbaa36f2561.jpg",
+                            "https://customer-assets.emergentagent.com/job_highlightloop/artifacts/l7b9t6et_0405c45d7c0f56c39dc4baaaca482a71.jpg",
+                            "https://customer-assets.emergentagent.com/job_highlightloop/artifacts/9cv31w7o_d20b291bd20bf99262d4dbdc41ded105.jpg",
+                            "https://customer-assets.emergentagent.com/job_highlightloop/artifacts/a2xxq01x_image.webp",
+                        ]).map((url, i) => (
+                            <motion.div key={i} whileHover={{ y: -6, scale: 1.05 }} className="h-52 flex-shrink-0 rounded-sm overflow-hidden border border-[#2C3440] shadow-2xl cursor-pointer">
+                                <img src={url} className="h-full w-auto object-contain bg-black" loading="lazy" alt="" />
+                            </motion.div>
+                        ))}
+                    </motion.div>
+                </div>
+            </section>
+
+            {/* Popular on Goodreads — curated recommendations */}
+            <section className="mb-14" data-testid="goodreads-shelf">
+                <div className="label-tag mb-3">Popular on Goodreads</div>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {[
+                        { title: "Tomorrow, and Tomorrow, and Tomorrow", author: "Gabrielle Zevin", color: "#40BCF4" },
+                        { title: "Fourth Wing", author: "Rebecca Yarros", color: "#FF2A79" },
+                        { title: "The Covenant of Water", author: "Abraham Verghese", color: "#9D4EDD" },
+                        { title: "Iron Flame", author: "Rebecca Yarros", color: "#FF8000" },
+                    ].map((b, i) => (
+                        <motion.div
+                            key={i}
+                            whileHover={{ y: -8, scale: 1.03 }}
+                            className="cursor-pointer group"
+                        >
+                            <div className="shadow-lg group-hover:shadow-[0_20px_50px_-20px_rgba(0,224,84,0.4)] transition-shadow">
+                                <Cover title={b.title} color={b.color} className="w-full h-auto aspect-[2/3]" size="md" />
+                            </div>
+                            <div className="mt-2 font-heading text-xs font-semibold text-white truncate">{b.title}</div>
+                            <div className="text-[10px] text-[#667788] truncate">{b.author}</div>
+                        </motion.div>
+                    ))}
+                </div>
+            </section>
 
             {/* Recent readings */}
             <div className="flex items-center justify-between mb-4">
@@ -217,6 +264,32 @@ const InkBleed = ({ text }) => (
         ))}
     </span>
 );
+
+const MiniStat = ({ label, value, testId }) => (
+    <div data-testid={testId}>
+        <div className="font-heading text-3xl font-bold text-white">{value}</div>
+        <div className="text-[10px] uppercase tracking-[0.25em] text-[#667788] mt-1">{label}</div>
+    </div>
+);
+
+const RatingDonut = ({ readings }) => {
+    const avg = readings.filter((r) => r.rating).reduce((s, r) => s + r.rating, 0) / Math.max(1, readings.filter((r) => r.rating).length);
+    const pct = (avg / 5) * 100;
+    const r = 42, c = 2 * Math.PI * r;
+    return (
+        <div className="relative w-28 h-28 flex-shrink-0">
+            <svg width="112" height="112" viewBox="0 0 112 112" className="-rotate-90">
+                <circle cx="56" cy="56" r={r} stroke="#2C3440" strokeWidth="6" fill="none" />
+                <motion.circle cx="56" cy="56" r={r} stroke="#00E054" strokeWidth="6" fill="none" strokeLinecap="round"
+                    initial={{ strokeDasharray: `0 ${c}` }} animate={{ strokeDasharray: `${(pct/100)*c} ${c}` }} transition={{ duration: 1.2, ease: "easeOut" }} />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <div className="font-heading text-2xl font-bold">{avg.toFixed(1)}</div>
+                <div className="text-[9px] uppercase tracking-widest text-[#667788]">Avg ★</div>
+            </div>
+        </div>
+    );
+};
 
 const StatCard = ({ icon, label, value, testId }) => (
     <div className="bg-[#1B2228] border border-[#2C3440] rounded-lg p-5" data-testid={testId}>
