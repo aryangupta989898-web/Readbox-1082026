@@ -1,0 +1,84 @@
+{
+  "theme": "dark",
+  "archetype": "Archetype 4 & 5 Hybrid (Swiss High-Contrast + Cinematic Luxury)",
+  "aesthetic_concept": "A Letterboxd-inspired Knowledge Repository. Deep slate backgrounds with vibrant, hyper-functional color accents (green stars, orange likes) mapped strictly to reading logs and PDFs. The UI feels like an elite archive.",
+  "typography": {
+    "font_families": {
+      "heading": "Outfit, sans-serif",
+      "body": "IBM Plex Sans, sans-serif",
+      "mono": "JetBrains Mono, monospace"
+    },
+    "rules": {
+      "headings": "Use tight letter spacing (`tracking-tight`). Outfit provides a geometric, cinematic feel that looks great in uppercase or title case. Do not exceed `text-5xl` for main hero headings.",
+      "body": "IBM Plex Sans offers high legibility for dense reading materials, notes, and AI summaries. Use `text-base` or `text-sm` with `leading-relaxed`.",
+      "labels": "Uppercase, `tracking-[0.2em]`, `text-xs` for metadata like 'YEAR', 'MONTH', 'AUTHOR', 'READ DATE'."
+    }
+  },
+  "colors": {
+    "background": {
+      "base": "#14181C",
+      "surface": "#1B2228",
+      "surface_elevated": "#2C3440",
+      "surface_hover": "#222B33"
+    },
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#99AABB",
+      "muted": "#667788"
+    },
+    "accents": {
+      "rating_green": "#00E054",
+      "like_orange": "#FF8000",
+      "review_blue": "#40BCF4",
+      "border": "#2C3440"
+    },
+    "rules": "Never use pure black (`#000000`). Use `#14181C` as the absolute floor. Accents are purely functional and should not be used as generic background gradients."
+  },
+  "spacing_and_layout": {
+    "general": "Follow the 'Control Room' dense grid for the 'Readings' grid page. Use Generous Spacing (`py-12` or `py-16`) between major horizontal sections on the home/detail pages.",
+    "diary_list_view": "Mimic the Letterboxd Diary list: A flat grid row layout. Col 1 (w-16): Month/Year label. Col 2 (w-12): Day. Col 3: Cover Thumbnail + Title (bold) + Year (muted). Col 4: Rating Stars (Green) + Like Heart (Orange) + Review Icon (Blue). Add a 1px `border-b border-[#2C3440]` to separate rows.",
+    "readings_grid_view": "Dense grid layout (`grid-cols-3 md:grid-cols-5 lg:grid-cols-6 lg:gap-4 gap-2`). Cover image spans the full width of the cell, aspect ratio 2:3. Rating stars are centered closely below the cover.",
+    "surfaces": "Use flat solid backgrounds (`bg-[#1B2228]`). Use 1px subtle borders (`border-[#2C3440]`) and no heavy shadows for a crisp, technical look. Only add soft drop-shadows on hover for book covers."
+  },
+  "components_blueprint": {
+    "navigation": "Sticky top header, `backdrop-blur-xl bg-[#14181C]/90 border-b border-[#2C3440]`. Logo left, Navigation Links center, 'Log a Reading' CTA right.",
+    "pdf_cover": "Aspect ratio 2:3 (standard book proportions). `rounded-md`, `border border-[#2C3440]`. On hover: scale up slightly (`-translate-y-1`) with `ring-2 ring-[#00E054]/50`. This applies to both Diary thumbnails and Grid View.",
+    "pdf_upload_flow": "Use Shadcn Dialog. Central drag-and-drop zone (`bg-[#1B2228] border-dashed border-2 border-[#2C3440]`). Show an AI processing skeleton loader while the synopsis is generated.",
+    "reading_detail_hero": "Two-column split. Left: Large Cover Image. Right: Title, Author, Date Logged, Ratings, and Action Buttons (Like, Review, Log). Use a heavily blurred, darkened version of the cover image as the background hero banner (`opacity-20`).",
+    "reading_detail_tabs": "Use Shadcn Tabs. Override standard styling to match the dark theme (`bg-[#1B2228]`, active text `#FFFFFF`, active border bottom `#00E054`). Tabs needed: 'Synopsis' (AI), 'Topics Checklist', 'AI Notes' (generated from checklist), 'My Highlights', 'Quiz'.",
+    "flashcard_revision": "Aspect-video card for spaced repetition highlights. `bg-[#1B2228] border border-[#2C3440] rounded-lg`. Centered large text. Must include a 'Flip' animation using Framer Motion (`rotateY`). Action buttons below for 'Hard', 'Good', 'Easy'."
+  },
+  "motion_and_interaction": {
+    "hover_states": "Cards lift `-translate-y-1`. Icons scale up `scale-110` and brighten on hover.",
+    "transitions": "Use `transition-all duration-200 ease-in-out` on all interactive elements.",
+    "flashcard_flip": "Use `framer-motion` to animate `rotateY` from 0 to 180 degrees based on flipped state."
+  },
+  "icons": {
+    "library": "@phosphor-icons/react",
+    "usage": "Use filled variants for active states (e.g., filled green stars, filled orange hearts). Use regular variants for inactive states."
+  },
+  "testing_attributes": {
+    "rules": "ALL interactive and informational elements MUST have a `data-testid`. Examples: `data-testid='diary-row-item'`, `data-testid='rating-star-3'`, `data-testid='like-button'`, `data-testid='upload-pdf-btn'`, `data-testid='flashcard-flip-btn'`, `data-testid='ai-checklist-item'`."
+  },
+  "image_urls": [
+    {
+      "url": "https://images.unsplash.com/photo-1688494963827-9f9dc1c51bd0?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1ODB8MHwxfHNlYXJjaHwzfHxib29rJTIwY292ZXIlMjBtaW5pbWFsJTIwZGFya3xlbnwwfHx8fDE3ODMzODc1NDV8MA&ixlib=rb-4.1.0&q=85",
+      "category": "sample_cover",
+      "description": "Abstract multicolored lines on dark background. Use as a placeholder cover for logged PDFs."
+    },
+    {
+      "url": "https://images.unsplash.com/photo-1656275544060-1c0515d192b6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTN8MHwxfHNlYXJjaHwxfHxwZXJzb24lMjByZWFkaW5nJTIwdGFibGV0JTIwZGFyayUyMG1vb2R5fGVufDB8fHx8MTc4MzM4NzU0NXww&ixlib=rb-4.1.0&q=85",
+      "category": "hero_background",
+      "description": "Hand holding tablet in dark moody setting. Use for the 'Upload PDF' empty state banner or revision dashboard header."
+    }
+  ],
+  "instructions_to_main_agent": [
+    "Build the application using standard React (.js extension) and Tailwind CSS. DO NOT use .tsx files.",
+    "Run `yarn add @phosphor-icons/react framer-motion lucide-react clsx tailwind-merge` before starting.",
+    "Implement the 'Diary' view exactly as a list using a flex/grid row layout per entry, NOT standard cards. Align columns strictly like a ledger.",
+    "Implement the 'Readings' view as a tight grid of 2:3 aspect ratio covers, focusing purely on visual density.",
+    "Use Shadcn UI for Tabs (reading detail page), Checkbox (AI topic checklist), and Dialog (upload flow). Customize Shadcn components to remove Vercel aesthetics and apply the custom dark hex codes.",
+    "Build a distinct 'Revision' module. Flashcards must use Framer Motion for physical flip interactions.",
+    "Remember to inject `data-testid` on EVERY interactive element (buttons, tabs, inputs, grid items)."
+  ]
+}
