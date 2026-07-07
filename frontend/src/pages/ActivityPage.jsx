@@ -136,6 +136,35 @@ export const ActivityPage = ({ onLog }) => {
                 </section>
             )}
 
+            {/* Rating distribution — subtle bar to fill space */}
+            {data?.total_readings > 0 && (
+                <section className="mb-14" data-testid="rating-distribution">
+                    <div className="label-tag mb-3">Your ratings</div>
+                    <div className="flex items-end gap-2 h-16">
+                        {[5,4,3,2,1].map((star) => {
+                            const count = readings.filter((r) => Math.round(r.rating || 0) === star).length;
+                            const max = Math.max(1, ...[5,4,3,2,1].map((s) => readings.filter((r) => Math.round(r.rating || 0) === s).length));
+                            const h = (count / max) * 100;
+                            return (
+                                <div key={star} className="flex-1 flex flex-col items-center gap-1">
+                                    <div className="w-full flex flex-col justify-end h-12">
+                                        <motion.div
+                                            initial={{ height: 0 }}
+                                            animate={{ height: `${Math.max(4, h)}%` }}
+                                            transition={{ delay: star * 0.05, duration: 0.5 }}
+                                            className="w-full rounded-t"
+                                            style={{ background: `linear-gradient(180deg, #00E054 0%, #007a2f 100%)`, opacity: count ? 1 : 0.2 }}
+                                        />
+                                    </div>
+                                    <div className="text-[10px] text-[#667788]">{star}★</div>
+                                    <div className="text-[10px] text-white font-heading">{count}</div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </section>
+            )}
+
             {/* Recent readings */}
             <div className="flex items-center justify-between mb-4">
                 <h2 className="font-heading text-xl">Recent Readings</h2>
@@ -148,12 +177,12 @@ export const ActivityPage = ({ onLog }) => {
                         initial={{ opacity: 0, y: 12 }}
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: i * 0.05, duration: 0.35 }}
-                        whileHover={{ y: -4 }}
-                        className="cursor-pointer"
+                        whileHover={{ y: -8, scale: 1.05, transition: { duration: 0.2 } }}
+                        className="cursor-pointer group"
                         onClick={() => nav(`/readings/${r.id}`)}
                         data-testid={`recent-reading-${r.id}`}
                     >
-                        <div className="cover-hover">
+                        <div className="cover-hover shadow-lg group-hover:shadow-[0_20px_50px_-20px_rgba(0,224,84,0.5)] transition-shadow">
                             <Cover reading={r} title={r.title} color={r.cover_color} size="md" className="w-full h-auto aspect-[2/3]" />
                         </div>
                         <div className="mt-2 flex justify-center">

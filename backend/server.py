@@ -609,13 +609,22 @@ async def generate_cover(reading_id: str):
         mime = "image/png"
         # OpenAI's current image generation model (branded as GPT image; latest gpt-image-1)
         try:
-            chat.with_model("openai", "gpt-image-1").with_params(modalities=["image", "text"])
+            chat.with_model("openai", "dall-e-3").with_params(modalities=["image", "text"])
             _, images = await chat.send_message_multimodal_response(UserMessage(text=art_prompt))
             if images:
                 image_bytes = base64.b64decode(images[0]["data"])
                 mime = images[0].get("mime_type", "image/png")
         except Exception as e:
-            logger.warning(f"OpenAI cover gen fallback: {e}")
+            logger.warning(f"DALL-E 3 fallback: {e}")
+            try:
+                chat2 = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"cover-{reading_id}-alt", system_message="Editorial illustrator.")
+                chat2.with_model("openai", "gpt-image-1").with_params(modalities=["image", "text"])
+                _, images = await chat2.send_message_multimodal_response(UserMessage(text=art_prompt))
+                if images:
+                    image_bytes = base64.b64decode(images[0]["data"])
+                    mime = images[0].get("mime_type", "image/png")
+            except Exception as e2:
+                logger.warning(f"OpenAI cover gen fallback: {e2}")
         if image_bytes is None:
             chat2 = LlmChat(api_key=EMERGENT_LLM_KEY, session_id=f"cover-{reading_id}-fb", system_message="Editorial illustrator.")
             chat2.with_model("gemini", "gemini-3.1-flash-image-preview").with_params(modalities=["image", "text"])
