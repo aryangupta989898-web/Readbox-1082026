@@ -84,7 +84,7 @@ class TestLists:
         assert g.status_code == 200
         lists = g.json()
         assert isinstance(lists, list)
-        found = next((l for l in lists if l["id"] == lid), None)
+        found = next((lst for lst in lists if lst["id"] == lid), None)
         assert found is not None
         assert "preview" in found
         assert "count" in found

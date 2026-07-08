@@ -999,19 +999,19 @@ async def convert_wishlist_to_reading(item_id: str, status: str = "reading"):
         raise HTTPException(status_code=404, detail="Not found")
 
     reading_id = str(uuid.uuid4())
-    new_storage_path = item.get("storage_path")
+    new_storage_path = None
     pdf_text = ""
-    if new_storage_path:
+    if item.get("storage_path"):
         try:
-            data, _ct = get_object(new_storage_path)
+            data, _ct = get_object(item["storage_path"])
             pdf_text = extract_pdf_text(data)
-            # Copy to readings folder for consistency
-            ext = new_storage_path.rsplit(".", 1)[-1] if "." in new_storage_path else "pdf"
+            ext = item["storage_path"].rsplit(".", 1)[-1] if "." in item["storage_path"] else "pdf"
             dest = f"{APP_NAME}/uploads/{DEFAULT_USER}/{reading_id}.{ext}"
             put_object(dest, data, "application/pdf")
             new_storage_path = dest
         except Exception as e:
             logger.error(f"Wishlist PDF copy failed: {e}")
+            new_storage_path = None  # Don't leave the reading pointing at soon-to-be-deleted wishlist path
 
     normalized_status = status if status in ("reading", "completed") else "reading"
     reading = {
