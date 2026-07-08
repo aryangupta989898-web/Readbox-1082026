@@ -13,6 +13,7 @@ import { Cover } from "../components/Cover";
 import { StarRating } from "../components/StarRating";
 import { TagsPicker } from "../components/TagsPicker";
 import { ProgressRing } from "../components/ProgressRing";
+import { AddToListButton } from "../components/AddToListButton";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { Checkbox } from "../components/ui/checkbox";
 import { Textarea } from "../components/ui/textarea";
@@ -187,6 +188,7 @@ export const ReadingDetailPage = () => {
                             <ImageIcon size={14} className="mr-1" />
                             {coverBusy ? "Generating..." : reading.cover_image_path ? "Regenerate Cover" : "Generate Cover"}
                         </Button>
+                        <AddToListButton readingId={id} />
                     </div>
                     <div>
                         <button onClick={() => nav(-1)} className="text-xs text-[#99AABB] hover:text-white flex items-center gap-1 mb-4" data-testid="back-btn"><ArrowLeft size={14}/>Back</button>

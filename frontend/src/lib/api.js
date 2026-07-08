@@ -45,3 +45,19 @@ export const fetchAllTags = () => api.get(`/tags/all`).then((r) => r.data);
 
 export const toggleLike = (id, liked) => api.patch(`/readings/${id}`, { liked }).then((r) => r.data);
 export const updateStatus = (id, patch) => api.patch(`/readings/${id}`, patch).then((r) => r.data);
+
+// Lists
+export const fetchLists = () => api.get("/lists").then((r) => r.data);
+export const fetchList = (id) => api.get(`/lists/${id}`).then((r) => r.data);
+export const createList = (payload) => api.post("/lists", payload).then((r) => r.data);
+export const updateList = (id, patch) => api.patch(`/lists/${id}`, patch).then((r) => r.data);
+export const deleteList = (id) => api.delete(`/lists/${id}`).then((r) => r.data);
+export const addReadingToList = (listId, readingId) => api.post(`/lists/${listId}/readings`, { reading_id: readingId }).then((r) => r.data);
+export const removeReadingFromList = (listId, readingId) => api.delete(`/lists/${listId}/readings/${readingId}`).then((r) => r.data);
+
+// Wishlist
+export const fetchWishlist = () => api.get("/wishlist").then((r) => r.data);
+export const createWishlist = (formData) => api.post("/wishlist", formData, { headers: { "Content-Type": "multipart/form-data" } }).then((r) => r.data);
+export const updateWishlist = (id, patch) => api.patch(`/wishlist/${id}`, patch).then((r) => r.data);
+export const deleteWishlist = (id) => api.delete(`/wishlist/${id}`).then((r) => r.data);
+export const convertWishlistToReading = (id, status = "reading") => api.post(`/wishlist/${id}/convert?status=${status}`).then((r) => r.data);

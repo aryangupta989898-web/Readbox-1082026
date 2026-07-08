@@ -119,6 +119,35 @@ class TagUpdate(BaseModel):
     tags: List[dict]  # [{name, color, icon}]
 
 
+class ListCreate(BaseModel):
+    title: str
+    description: Optional[str] = ""
+    cover_color: Optional[str] = None
+    reading_ids: Optional[List[str]] = None
+
+
+class ListUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    cover_color: Optional[str] = None
+
+
+class ListReadingOp(BaseModel):
+    reading_id: str
+
+
+class WishlistCreate(BaseModel):
+    title: str
+    author: Optional[str] = ""
+    notes: Optional[str] = ""
+
+
+class WishlistUpdate(BaseModel):
+    title: Optional[str] = None
+    author: Optional[str] = None
+    notes: Optional[str] = None
+
+
 # ============ Helpers ============
 def now_iso():
     return datetime.now(timezone.utc).isoformat()
@@ -800,6 +829,214 @@ async def recap_months():
     ).to_list(5000)
     months = sorted({(r.get("read_date") or "")[:7] for r in readings if r.get("read_date")}, reverse=True)
     return [m for m in months if m]
+
+
+# ============ Lists ============
+LIST_PALETTE = ["#D9C7A0", "#C9B8E6", "#A8C5B5", "#E8B4A0", "#B5C7DE", "#E6C9A0", "#C7DEBB", "#DEB5C0"]
+
+
+def _pick_list_color(seed: str) -> str:
+    return LIST_PALETTE[sum(ord(c) for c in seed) % len(LIST_PALETTE)]
+
+
+@api_router.post("/lists")
+async def create_list(payload: ListCreate):
+    list_id = str(uuid.uuid4())
+    title = payload.title.strip()[:120] or "Untitled List"
+    doc = {
+        "id": list_id,
+        "user_id": DEFAULT_USER,
+        "title": title,
+        "description": (payload.description or "")[:400],
+        "cover_color": payload.cover_color or _pick_list_color(title),
+        "reading_ids": list(dict.fromkeys(payload.reading_ids or []))[:200],
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    await db.lists.insert_one(dict(doc))
+    return strip_id(doc)
+
+
+@api_router.get("/lists")
+async def get_lists():
+    docs = await db.lists.find({"user_id": DEFAULT_USER}, {"_id": 0}).sort("updated_at", -1).to_list(500)
+    # Attach cover previews (first 4 readings) for each list
+    all_reading_ids = list({rid for d in docs for rid in (d.get("reading_ids") or [])})
+    readings = await db.readings.find(
+        {"id": {"$in": all_reading_ids}},
+        {"_id": 0, "pdf_text": 0},
+    ).to_list(1000) if all_reading_ids else []
+    rmap = {r["id"]: normalize_reading(r) for r in readings}
+    for d in docs:
+        preview_ids = (d.get("reading_ids") or [])[:4]
+        d["preview"] = [rmap[i] for i in preview_ids if i in rmap]
+        d["count"] = len(d.get("reading_ids") or [])
+    return docs
+
+
+@api_router.get("/lists/{list_id}")
+async def get_list(list_id: str):
+    doc = await db.lists.find_one({"id": list_id, "user_id": DEFAULT_USER}, {"_id": 0})
+    if not doc:
+        raise HTTPException(status_code=404, detail="List not found")
+    reading_ids = doc.get("reading_ids") or []
+    readings = await db.readings.find(
+        {"id": {"$in": reading_ids}},
+        {"_id": 0, "pdf_text": 0},
+    ).to_list(1000) if reading_ids else []
+    # Preserve list order
+    rmap = {r["id"]: normalize_reading(r) for r in readings}
+    doc["readings"] = [rmap[i] for i in reading_ids if i in rmap]
+    return doc
+
+
+@api_router.patch("/lists/{list_id}")
+async def update_list(list_id: str, upd: ListUpdate):
+    update = {k: v for k, v in upd.model_dump().items() if v is not None}
+    update["updated_at"] = now_iso()
+    result = await db.lists.update_one({"id": list_id, "user_id": DEFAULT_USER}, {"$set": update})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Not found")
+    doc = await db.lists.find_one({"id": list_id}, {"_id": 0})
+    return doc
+
+
+@api_router.delete("/lists/{list_id}")
+async def delete_list(list_id: str):
+    await db.lists.delete_one({"id": list_id, "user_id": DEFAULT_USER})
+    return {"ok": True}
+
+
+@api_router.post("/lists/{list_id}/readings")
+async def add_reading_to_list(list_id: str, op: ListReadingOp):
+    result = await db.lists.update_one(
+        {"id": list_id, "user_id": DEFAULT_USER},
+        {"$addToSet": {"reading_ids": op.reading_id}, "$set": {"updated_at": now_iso()}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="List not found")
+    return {"ok": True}
+
+
+@api_router.delete("/lists/{list_id}/readings/{reading_id}")
+async def remove_reading_from_list(list_id: str, reading_id: str):
+    result = await db.lists.update_one(
+        {"id": list_id, "user_id": DEFAULT_USER},
+        {"$pull": {"reading_ids": reading_id}, "$set": {"updated_at": now_iso()}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="List not found")
+    return {"ok": True}
+
+
+# ============ Wishlist ============
+@api_router.post("/wishlist")
+async def create_wishlist(
+    file: Optional[UploadFile] = File(None),
+    title: str = Form(...),
+    author: Optional[str] = Form(""),
+    notes: Optional[str] = Form(""),
+):
+    item_id = str(uuid.uuid4())
+    storage_path = None
+    file_name = None
+    if file:
+        data = await file.read()
+        ext = file.filename.split(".")[-1].lower() if file.filename and "." in file.filename else "pdf"
+        storage_path_key = f"{APP_NAME}/wishlist/{DEFAULT_USER}/{item_id}.{ext}"
+        try:
+            result = put_object(storage_path_key, data, file.content_type or "application/pdf")
+            storage_path = result["path"]
+            file_name = file.filename
+        except Exception as e:
+            logger.error(f"Wishlist upload failed: {e}")
+            raise HTTPException(status_code=500, detail="File upload failed")
+
+    doc = {
+        "id": item_id,
+        "user_id": DEFAULT_USER,
+        "title": title.strip()[:200] or "Untitled",
+        "author": (author or "").strip()[:120],
+        "notes": (notes or "")[:500],
+        "storage_path": storage_path,
+        "file_name": file_name,
+        "cover_color": _pick_color(title),
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    await db.wishlist.insert_one(dict(doc))
+    return strip_id(doc)
+
+
+@api_router.get("/wishlist")
+async def get_wishlist():
+    items = await db.wishlist.find({"user_id": DEFAULT_USER}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return items
+
+
+@api_router.patch("/wishlist/{item_id}")
+async def update_wishlist(item_id: str, upd: WishlistUpdate):
+    update = {k: v for k, v in upd.model_dump().items() if v is not None}
+    update["updated_at"] = now_iso()
+    result = await db.wishlist.update_one({"id": item_id, "user_id": DEFAULT_USER}, {"$set": update})
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Not found")
+    doc = await db.wishlist.find_one({"id": item_id}, {"_id": 0})
+    return doc
+
+
+@api_router.delete("/wishlist/{item_id}")
+async def delete_wishlist(item_id: str):
+    await db.wishlist.delete_one({"id": item_id, "user_id": DEFAULT_USER})
+    return {"ok": True}
+
+
+@api_router.post("/wishlist/{item_id}/convert")
+async def convert_wishlist_to_reading(item_id: str, status: str = "reading"):
+    """Promote a wishlist item into a Reading (moving PDF if present)."""
+    item = await db.wishlist.find_one({"id": item_id, "user_id": DEFAULT_USER})
+    if not item:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    reading_id = str(uuid.uuid4())
+    new_storage_path = item.get("storage_path")
+    pdf_text = ""
+    if new_storage_path:
+        try:
+            data, _ct = get_object(new_storage_path)
+            pdf_text = extract_pdf_text(data)
+            # Copy to readings folder for consistency
+            ext = new_storage_path.rsplit(".", 1)[-1] if "." in new_storage_path else "pdf"
+            dest = f"{APP_NAME}/uploads/{DEFAULT_USER}/{reading_id}.{ext}"
+            put_object(dest, data, "application/pdf")
+            new_storage_path = dest
+        except Exception as e:
+            logger.error(f"Wishlist PDF copy failed: {e}")
+
+    normalized_status = status if status in ("reading", "completed") else "reading"
+    reading = {
+        "id": reading_id,
+        "user_id": DEFAULT_USER,
+        "title": item.get("title") or "Untitled",
+        "author": item.get("author") or "",
+        "read_date": now_iso()[:10],
+        "rating": None,
+        "review": "",
+        "liked": False,
+        "status": normalized_status,
+        "total_pages": None,
+        "pages_read": 0 if normalized_status == "reading" else None,
+        "storage_path": new_storage_path,
+        "file_name": item.get("file_name"),
+        "pdf_text": pdf_text,
+        "synopsis": "",
+        "cover_color": item.get("cover_color") or _pick_color(item.get("title") or "x"),
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    await db.readings.insert_one(reading)
+    await db.wishlist.delete_one({"id": item_id})
+    return strip_id(reading)
 
 
 @api_router.get("/")

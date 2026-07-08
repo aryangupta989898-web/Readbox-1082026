@@ -10,6 +10,9 @@ import { RevisionPage } from "./pages/RevisionPage";
 import { RecapPage } from "./pages/RecapPage";
 import { LikesPage } from "./pages/LikesPage";
 import { AuthorPage } from "./pages/AuthorPage";
+import { ListsPage } from "./pages/ListsPage";
+import { ListDetailPage } from "./pages/ListDetailPage";
+import { WishlistPage } from "./pages/WishlistPage";
 import { LogReadingDialog } from "./components/LogReadingDialog";
 import { Toaster } from "./components/ui/sonner";
 import { Navigate } from "react-router-dom";
@@ -38,6 +41,9 @@ function App() {
                         <Route path="/recap/:year/:month" element={<RecapPage />} />
                         <Route path="/likes" element={<LikesPage />} />
                         <Route path="/author/:name" element={<AuthorPage />} />
+                        <Route path="/lists" element={<ListsPage />} />
+                        <Route path="/lists/:id" element={<ListDetailPage />} />
+                        <Route path="/wishlist" element={<WishlistPage />} />
                     </Routes>
                 </main>
                 <LogReadingDialog
