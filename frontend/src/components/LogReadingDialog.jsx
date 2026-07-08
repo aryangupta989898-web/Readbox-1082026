@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
@@ -56,6 +56,7 @@ export const LogReadingDialog = ({ open, onOpenChange, onCreated }) => {
             <DialogContent className="bg-[#1B2228] border-[#2C3440] text-white max-w-xl max-h-[90vh] overflow-y-auto" data-testid="log-reading-dialog">
                 <DialogHeader>
                     <DialogTitle className="font-heading text-2xl">Log a Reading</DialogTitle>
+                    <DialogDescription className="text-xs text-[#99AABB]">Upload a PDF or add manually. AI extracts a synopsis for completed reads.</DialogDescription>
                 </DialogHeader>
 
                 {/* Status toggle */}

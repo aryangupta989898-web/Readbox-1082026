@@ -144,6 +144,21 @@ def strip_id(doc):
     return doc
 
 
+READING_DEFAULTS = {"status": "completed", "total_pages": None, "pages_read": None, "liked": False}
+
+
+def normalize_reading(doc):
+    """Ensure new schema fields are always present on legacy documents."""
+    if not doc:
+        return doc
+    for k, v in READING_DEFAULTS.items():
+        if k not in doc or doc.get(k) is None and k == "liked":
+            doc[k] = v
+        elif k not in doc:
+            doc[k] = v
+    return doc
+
+
 async def call_claude(system_message: str, user_text: str, session_id: str) -> str:
     chat = LlmChat(
         api_key=EMERGENT_LLM_KEY,
@@ -285,7 +300,7 @@ async def list_readings():
         {"user_id": DEFAULT_USER},
         {"_id": 0, "pdf_text": 0},
     ).sort("read_date", -1).to_list(1000)
-    return items
+    return [normalize_reading(i) for i in items]
 
 
 @api_router.get("/readings/{reading_id}")
@@ -293,7 +308,7 @@ async def get_reading(reading_id: str):
     doc = await db.readings.find_one({"id": reading_id, "user_id": DEFAULT_USER}, {"_id": 0, "pdf_text": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Reading not found")
-    return doc
+    return normalize_reading(doc)
 
 
 @api_router.patch("/readings/{reading_id}")
