@@ -7,16 +7,18 @@ import {
     createHighlight, fetchHighlights, deleteHighlight,
     generateQuiz, fetchQuiz,
     updateTags, generateCover,
-    suggestHighlights,
+    suggestHighlights, toggleLike,
 } from "../lib/api";
 import { Cover } from "../components/Cover";
 import { StarRating } from "../components/StarRating";
 import { TagsPicker } from "../components/TagsPicker";
+import { ProgressRing } from "../components/ProgressRing";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { Checkbox } from "../components/ui/checkbox";
 import { Textarea } from "../components/ui/textarea";
+import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
-import { Heart, Trash, ArrowLeft, Sparkle, Plus, Image as ImageIcon } from "@phosphor-icons/react";
+import { Heart, Trash, ArrowLeft, Sparkle, Plus, Image as ImageIcon, PencilSimple, BookOpen, CheckCircle, Check } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 export const ReadingDetailPage = () => {
@@ -35,6 +37,9 @@ export const ReadingDetailPage = () => {
     const [coverBusy, setCoverBusy] = useState(false);
     const [suggestions, setSuggestions] = useState([]);
     const [suggestBusy, setSuggestBusy] = useState(false);
+    const [editingAuthor, setEditingAuthor] = useState(false);
+    const [authorDraft, setAuthorDraft] = useState("");
+    const [pagesBusy, setPagesBusy] = useState(false);
 
     const runSuggest = async () => {
         setSuggestBusy(true);
@@ -108,6 +113,63 @@ export const ReadingDetailPage = () => {
         setChecklist(checklist.map((c) => c.id === item.id ? { ...c, checked: !c.checked } : c));
     };
 
+    const allChecked = checklist.length > 0 && checklist.every((c) => c.checked);
+    const toggleSelectAll = async () => {
+        const nextState = !allChecked;
+        setChecklist(checklist.map((c) => ({ ...c, checked: nextState })));
+        const toFlip = checklist.filter((c) => c.checked !== nextState);
+        try {
+            await Promise.all(toFlip.map((c) => toggleChecklist(c.id, nextState)));
+        } catch {
+            toast.error("Some items failed to update");
+            const fresh = await fetchChecklist(id);
+            setChecklist(fresh);
+        }
+    };
+
+    const saveAuthor = async () => {
+        const trimmed = authorDraft.trim();
+        if (trimmed === (reading.author || "")) { setEditingAuthor(false); return; }
+        await patch({ author: trimmed });
+        setEditingAuthor(false);
+        toast.success("Author updated");
+    };
+
+    const setStatus = async (next) => {
+        setPagesBusy(true);
+        try {
+            const payload = { status: next };
+            if (next === "reading" && (reading.pages_read === null || reading.pages_read === undefined)) {
+                payload.pages_read = 0;
+            }
+            const u = await updateReading(id, payload);
+            setReading(u);
+            toast.success(next === "reading" ? "Marked as Currently Reading" : "Marked as Completed");
+        } catch { toast.error("Failed to update status"); }
+        finally { setPagesBusy(false); }
+    };
+
+    const savePages = async (field, value) => {
+        const v = value === "" ? null : Math.max(0, parseInt(value, 10) || 0);
+        const payload = { [field]: v };
+        if (field === "pages_read" && reading.total_pages && v >= reading.total_pages && v > 0) {
+            payload.status = "completed";
+        }
+        const u = await updateReading(id, payload);
+        setReading(u);
+    };
+
+    const flipLike = async () => {
+        const next = !reading.liked;
+        setReading({ ...reading, liked: next });
+        try { await toggleLike(id, next); }
+        catch { toast.error("Failed"); setReading({ ...reading, liked: !next }); }
+    };
+
+    const isReading = reading.status === "reading";
+    const pct = reading.total_pages > 0 ? Math.min(100, Math.round(((reading.pages_read || 0) / reading.total_pages) * 100)) : 0;
+
+
     return (
         <div className="pb-24" data-testid="reading-detail-page">
             {/* Hero */}
@@ -130,14 +192,92 @@ export const ReadingDetailPage = () => {
                         <button onClick={() => nav(-1)} className="text-xs text-[#99AABB] hover:text-white flex items-center gap-1 mb-4" data-testid="back-btn"><ArrowLeft size={14}/>Back</button>
                         <div className="label-tag mb-2">Reading Log · {reading.read_date}</div>
                         <h1 className="font-heading text-4xl font-bold mb-2">{reading.title}</h1>
-                        {reading.author && <div className="text-[#99AABB] mb-4">by {reading.author}</div>}
+                        {editingAuthor ? (
+                            <div className="flex items-center gap-2 mb-4" data-testid="author-edit">
+                                <Input
+                                    value={authorDraft}
+                                    onChange={(e) => setAuthorDraft(e.target.value)}
+                                    placeholder="Author name"
+                                    autoFocus
+                                    onKeyDown={(e) => e.key === "Enter" && saveAuthor()}
+                                    className="bg-[#1B2228] border-[#2C3440] text-white max-w-xs"
+                                    data-testid="author-edit-input"
+                                />
+                                <Button size="sm" onClick={saveAuthor} className="bg-[#00E054] text-[#14181C] hover:bg-[#00c94a]" data-testid="author-save-btn">Save</Button>
+                                <Button size="sm" variant="outline" onClick={() => { setEditingAuthor(false); setAuthorDraft(reading.author || ""); }} className="border-[#2C3440] bg-transparent text-white hover:bg-[#2C3440]" data-testid="author-cancel-btn">Cancel</Button>
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-2 mb-4 group">
+                                {reading.author ? (
+                                    <button
+                                        onClick={() => nav(`/author/${encodeURIComponent(reading.author)}`)}
+                                        className="text-[#99AABB] hover:text-[#c8ae7d] hover:underline underline-offset-4 transition"
+                                        data-testid="author-link"
+                                    >
+                                        by <span className="italic" style={{ fontFamily: "Cormorant Garamond, serif" }}>{reading.author}</span>
+                                    </button>
+                                ) : (
+                                    <span className="text-[#667788] italic text-sm">by Unknown</span>
+                                )}
+                                <button
+                                    onClick={() => setEditingAuthor(true)}
+                                    className="opacity-0 group-hover:opacity-100 text-[#667788] hover:text-white transition"
+                                    title="Edit author"
+                                    data-testid="author-edit-btn"
+                                >
+                                    <PencilSimple size={14} />
+                                </button>
+                            </div>
+                        )}
+
+                        {/* Status control */}
+                        <div className="flex items-center gap-2 mb-4" data-testid="status-controls">
+                            <button
+                                onClick={() => setStatus(isReading ? "completed" : "reading")}
+                                disabled={pagesBusy}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs uppercase tracking-widest transition ${isReading ? "border-[#FF8000] bg-[#FF8000]/10 text-[#FF8000] hover:bg-[#FF8000]/20" : "border-[#00E054] bg-[#00E054]/10 text-[#00E054] hover:bg-[#00E054]/20"}`}
+                                data-testid="status-toggle-btn"
+                            >
+                                {isReading ? <><BookOpen size={12} weight="fill" /> Currently Reading</> : <><CheckCircle size={12} weight="fill" /> Completed</>}
+                            </button>
+                            {isReading && (
+                                <div className="flex items-center gap-2 text-xs text-[#99AABB]" data-testid="pages-controls">
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        max={reading.total_pages || 99999}
+                                        value={reading.pages_read ?? ""}
+                                        onChange={(e) => setReading({ ...reading, pages_read: e.target.value === "" ? null : parseInt(e.target.value, 10) || 0 })}
+                                        onBlur={(e) => savePages("pages_read", e.target.value)}
+                                        placeholder="0"
+                                        className="w-16 bg-[#1B2228] border border-[#2C3440] rounded px-2 py-1 text-center text-white focus:outline-none focus:border-[#FF8000]"
+                                        data-testid="pages-read-input"
+                                    />
+                                    <span>/</span>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        value={reading.total_pages ?? ""}
+                                        onChange={(e) => setReading({ ...reading, total_pages: e.target.value === "" ? null : parseInt(e.target.value, 10) || 0 })}
+                                        onBlur={(e) => savePages("total_pages", e.target.value)}
+                                        placeholder="—"
+                                        className="w-16 bg-[#1B2228] border border-[#2C3440] rounded px-2 py-1 text-center text-white focus:outline-none focus:border-[#FF8000]"
+                                        data-testid="total-pages-input"
+                                    />
+                                    <span className="uppercase tracking-widest text-[10px] text-[#667788]">pages</span>
+                                    {reading.total_pages > 0 && (
+                                        <div className="ml-2"><ProgressRing value={pct} size={32} stroke={3} color="#FF8000" /></div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                         <div className="mb-4">
                             <TagsPicker tags={reading.tags || []} onChange={setTags} />
                         </div>
                         <div className="flex items-center gap-4 mb-6">
                             <StarRating value={reading.rating || 0} onChange={(v) => patch({ rating: v })} size={22} testId="detail-rating" />
-                            <button onClick={() => patch({ liked: !reading.liked })} className="transition-transform hover:scale-110" data-testid="like-btn">
-                                <Heart size={26} weight={reading.liked ? "fill" : "regular"} color={reading.liked ? "#FF8000" : "#667788"} />
+                            <button onClick={flipLike} className="transition-transform hover:scale-110" data-testid="like-btn">
+                                <Heart size={26} weight={reading.liked ? "fill" : "regular"} color={reading.liked ? "#FF2A79" : "#667788"} />
                             </button>
                             {reading.storage_path && (
                                 <a href={`${process.env.REACT_APP_BACKEND_URL}/api/readings/${id}/pdf`} target="_blank" rel="noreferrer" className="text-xs uppercase tracking-widest text-[#40BCF4] hover:underline" data-testid="view-pdf-link">Open PDF</a>
@@ -183,9 +323,23 @@ export const ReadingDetailPage = () => {
                                     <div className="label-tag mb-1">AI Topic Checklist</div>
                                     <div className="text-xs text-[#99AABB]">Check the topics you want to learn — AI will generate detailed notes only on those.</div>
                                 </div>
-                                <Button onClick={runChecklist} disabled={busy==="checklist"} className="bg-[#00E054] text-[#14181C] hover:bg-[#00c94a]" data-testid="gen-checklist-btn">
-                                    <Sparkle size={14} className="mr-1"/>{checklist.length ? "Regenerate" : "Generate"}
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                    {checklist.length > 0 && (
+                                        <Button
+                                            onClick={toggleSelectAll}
+                                            variant="outline"
+                                            size="sm"
+                                            className="border-[#2C3440] bg-transparent text-white hover:bg-[#2C3440]"
+                                            data-testid="select-all-btn"
+                                        >
+                                            <Check size={12} className="mr-1" />
+                                            {allChecked ? "Deselect All" : "Select All"}
+                                        </Button>
+                                    )}
+                                    <Button onClick={runChecklist} disabled={busy==="checklist"} className="bg-[#00E054] text-[#14181C] hover:bg-[#00c94a]" data-testid="gen-checklist-btn">
+                                        <Sparkle size={14} className="mr-1"/>{checklist.length ? "Regenerate" : "Generate"}
+                                    </Button>
+                                </div>
                             </div>
                             <div className="space-y-2">
                                 {checklist.map((it) => (

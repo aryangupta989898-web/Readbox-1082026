@@ -8,6 +8,8 @@ import { ReadingsGridPage } from "./pages/ReadingsGridPage";
 import { ReadingDetailPage } from "./pages/ReadingDetailPage";
 import { RevisionPage } from "./pages/RevisionPage";
 import { RecapPage } from "./pages/RecapPage";
+import { LikesPage } from "./pages/LikesPage";
+import { AuthorPage } from "./pages/AuthorPage";
 import { LogReadingDialog } from "./components/LogReadingDialog";
 import { Toaster } from "./components/ui/sonner";
 import { Navigate } from "react-router-dom";
@@ -34,6 +36,8 @@ function App() {
                         <Route path="/revision" element={<RevisionPage />} />
                         <Route path="/recap" element={<RecapRedirect />} />
                         <Route path="/recap/:year/:month" element={<RecapPage />} />
+                        <Route path="/likes" element={<LikesPage />} />
+                        <Route path="/author/:name" element={<AuthorPage />} />
                     </Routes>
                 </main>
                 <LogReadingDialog

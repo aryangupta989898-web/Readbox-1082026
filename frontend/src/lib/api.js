@@ -42,3 +42,6 @@ export const fetchRecapMonths = () => api.get(`/recap/months`).then((r) => r.dat
 
 export const suggestHighlights = (id) => api.post(`/readings/${id}/highlights/suggest`).then((r) => r.data);
 export const fetchAllTags = () => api.get(`/tags/all`).then((r) => r.data);
+
+export const toggleLike = (id, liked) => api.patch(`/readings/${id}`, { liked }).then((r) => r.data);
+export const updateStatus = (id, patch) => api.patch(`/readings/${id}`, patch).then((r) => r.data);

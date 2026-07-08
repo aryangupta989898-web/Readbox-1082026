@@ -79,6 +79,9 @@ class ReadingCreate(BaseModel):
     rating: Optional[float] = None
     review: Optional[str] = None
     liked: Optional[bool] = False
+    status: Optional[str] = None  # "reading" | "completed"
+    total_pages: Optional[int] = None
+    pages_read: Optional[int] = None
 
 
 class ReadingUpdate(BaseModel):
@@ -88,6 +91,9 @@ class ReadingUpdate(BaseModel):
     rating: Optional[float] = None
     review: Optional[str] = None
     liked: Optional[bool] = None
+    status: Optional[str] = None
+    total_pages: Optional[int] = None
+    pages_read: Optional[int] = None
 
 
 class HighlightCreate(BaseModel):
@@ -184,6 +190,9 @@ async def create_reading(
     rating: Optional[float] = Form(None),
     review: Optional[str] = Form(None),
     liked: Optional[bool] = Form(False),
+    status: Optional[str] = Form(None),
+    total_pages: Optional[int] = Form(None),
+    pages_read: Optional[int] = Form(None),
 ):
     reading_id = str(uuid.uuid4())
     storage_path = None
@@ -205,6 +214,9 @@ async def create_reading(
 
     inferred_title = title or (file_name.rsplit(".", 1)[0] if file_name else "Untitled Reading")
 
+    normalized_status = (status or "completed").lower()
+    if normalized_status not in ("reading", "completed"):
+        normalized_status = "completed"
     reading = {
         "id": reading_id,
         "user_id": DEFAULT_USER,
@@ -214,6 +226,9 @@ async def create_reading(
         "rating": rating,
         "review": review or "",
         "liked": bool(liked),
+        "status": normalized_status,
+        "total_pages": total_pages,
+        "pages_read": pages_read if pages_read is not None else (0 if normalized_status == "reading" else None),
         "storage_path": storage_path,
         "file_name": file_name,
         "pdf_text": pdf_text,

@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { fetchActivity, fetchReadings } from "../lib/api";
+import { fetchActivity, fetchReadings, toggleLike, updateStatus } from "../lib/api";
 import { Cover } from "../components/Cover";
 import { StarRating } from "../components/StarRating";
 import { TagChip } from "../components/TagsPicker";
-import { Sparkle } from "@phosphor-icons/react";
+import { ProgressRing } from "../components/ProgressRing";
+import { Sparkle, BookOpen, Heart } from "@phosphor-icons/react";
+import { toast } from "sonner";
 
 const WELCOMES = [
     { pre: "Nice to see", ink: "you back." }, { pre: "Fresh page,", ink: "fresh you." },
@@ -66,16 +68,19 @@ export const ActivityPage = ({ onLog }) => {
         fetchReadings().then(setReadings).catch(() => {});
     }, []);
 
-    const { topTags, staleReading, avg, timeline } = useMemo(() => {
+    const { topTags, staleReading, avg, timeline, currentlyReading } = useMemo(() => {
         const tagFreq = {};
         readings.forEach((r) => (r.tags || []).forEach((t) => { tagFreq[t.name] = (tagFreq[t.name] || 0) + 1; }));
         const sorted = [...readings].sort((a,b) => (a.read_date||"").localeCompare(b.read_date||""));
         const rated = readings.filter((r) => r.rating);
         const avg = rated.length ? rated.reduce((s,r) => s + r.rating, 0) / rated.length : 0;
         const timeline = [...readings].sort((a,b) => (b.read_date||"").localeCompare(a.read_date||"")).slice(0,4).reverse();
+        const currentlyReading = readings
+            .filter((r) => r.status === "reading")
+            .sort((a,b) => (b.updated_at || b.read_date || "").localeCompare(a.updated_at || a.read_date || ""));
         return {
             topTags: Object.entries(tagFreq).sort((a,b) => b[1]-a[1]).slice(0,3).map(([n,c]) => ({ name: n, count: c, ...(readings.flatMap(r => r.tags || []).find(t => t.name === n) || {}) })),
-            staleReading: sorted[0], avg, timeline,
+            staleReading: sorted[0], avg, timeline, currentlyReading,
         };
     }, [readings]);
 
@@ -104,6 +109,65 @@ export const ActivityPage = ({ onLog }) => {
                     </motion.div>
                 </div>
             </section>
+
+            {/* Continue Reading — currently reading strip */}
+            {currentlyReading.length > 0 && (
+                <section className="mb-14" data-testid="continue-reading">
+                    <div className="flex items-center justify-between mb-4">
+                        <div className="label-tag flex items-center gap-2 text-[#FF8000]">
+                            <BookOpen size={12} weight="fill" /> Continue Reading · {currentlyReading.length}
+                        </div>
+                        <button className="text-xs uppercase tracking-widest text-[#99AABB] hover:text-white" onClick={() => nav('/readings')}>See all</button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                        {currentlyReading.slice(0, 3).map((r, i) => {
+                            const pct = r.total_pages > 0 ? Math.round(((r.pages_read || 0) / r.total_pages) * 100) : 0;
+                            return (
+                                <motion.div
+                                    key={r.id}
+                                    initial={{ opacity: 0, y: 12 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ delay: i * 0.08 }}
+                                    whileHover={{ y: -4 }}
+                                    onClick={() => nav(`/readings/${r.id}`)}
+                                    className="cursor-pointer flex gap-4 p-4 rounded-lg bg-gradient-to-br from-[#1B2228] to-[#14181C] border border-[#2C3440] hover:border-[#FF8000]/60 transition"
+                                    data-testid={`continue-card-${r.id}`}
+                                >
+                                    <div className="w-16 flex-shrink-0">
+                                        <Cover reading={r} title={r.title} color={r.cover_color} className="w-full h-auto aspect-[2/3]" />
+                                    </div>
+                                    <div className="flex-1 min-w-0 flex flex-col justify-between">
+                                        <div>
+                                            <div className="font-heading font-bold truncate">{r.title}</div>
+                                            {r.author && <div className="text-xs text-[#99AABB] truncate">{r.author}</div>}
+                                        </div>
+                                        <div className="mt-2">
+                                            {r.total_pages > 0 ? (
+                                                <>
+                                                    <div className="flex items-center justify-between text-[10px] uppercase tracking-widest text-[#c8ae7d] mb-1">
+                                                        <span>{r.pages_read || 0} / {r.total_pages} pages</span>
+                                                        <span>{pct}%</span>
+                                                    </div>
+                                                    <div className="h-1 rounded-full bg-[#2C3440] overflow-hidden">
+                                                        <motion.div
+                                                            initial={{ width: 0 }}
+                                                            animate={{ width: `${pct}%` }}
+                                                            transition={{ duration: 0.8, ease: "easeOut" }}
+                                                            className="h-full bg-gradient-to-r from-[#FF8000] to-[#FFB800]"
+                                                        />
+                                                    </div>
+                                                </>
+                                            ) : (
+                                                <div className="text-[10px] uppercase tracking-widest text-[#667788]">In progress · set pages to track</div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            );
+                        })}
+                    </div>
+                </section>
+            )}
 
             {/* Recent Reads — horizontal timeline */}
             <section className="mb-14" data-testid="recent-timeline">

@@ -1,12 +1,13 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { fetchReadings } from "../lib/api";
+import { fetchReadings, toggleLike } from "../lib/api";
 import { Cover } from "../components/Cover";
 import { StarRating } from "../components/StarRating";
 import { TagChip } from "../components/TagsPicker";
 import { FilterBar, applyFilter } from "../components/FilterBar";
 import { Heart, PencilSimple } from "@phosphor-icons/react";
+import { toast } from "sonner";
 
 const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
 
@@ -17,6 +18,19 @@ export const DiaryPage = () => {
     const nav = useNavigate();
 
     useEffect(() => { fetchReadings().then(setReadings).catch(() => {}); }, []);
+
+    const flipLike = async (e, r) => {
+        e.stopPropagation();
+        const next = !r.liked;
+        setReadings((prev) => prev.map((x) => x.id === r.id ? { ...x, liked: next } : x));
+        try { await toggleLike(r.id, next); }
+        catch { toast.error("Failed to update like"); setReadings((prev) => prev.map((x) => x.id === r.id ? { ...x, liked: !next } : x)); }
+    };
+
+    const goAuthor = (e, author) => {
+        e.stopPropagation();
+        if (author) nav(`/author/${encodeURIComponent(author)}`);
+    };
 
     const filtered = applyFilter(readings, search, tag);
     const grouped = useMemo(() => {
@@ -88,7 +102,15 @@ export const DiaryPage = () => {
                             <Cover reading={r} title={r.title} color={r.cover_color} size="xs" />
                             <div className="min-w-0">
                                 <div className="font-heading font-bold truncate">{r.title}</div>
-                                {r.author && <div className="text-xs text-[#667788] truncate">{r.author}</div>}
+                                {r.author && (
+                                    <button
+                                        onClick={(e) => goAuthor(e, r.author)}
+                                        className="text-xs text-[#667788] truncate hover:text-[#c8ae7d] hover:underline underline-offset-2 transition text-left block max-w-full"
+                                        data-testid={`diary-author-${r.id}`}
+                                    >
+                                        {r.author}
+                                    </button>
+                                )}
                                 {r.tags && r.tags.length > 0 && (
                                     <div className="flex flex-wrap gap-1 mt-1">
                                         {r.tags.slice(0, 3).map((t, i) => <TagChip key={i} tag={t} />)}
@@ -99,7 +121,14 @@ export const DiaryPage = () => {
                         <div className="text-sm text-[#99AABB]">{r._date.getFullYear()}</div>
                         <div><StarRating value={r.rating || 0} readOnly size={14} testId={`diary-rating-${r.id}`} /></div>
                         <div className="flex items-center gap-2 text-[#667788]">
-                            <Heart size={16} weight={r.liked ? "fill" : "regular"} color={r.liked ? "#FF8000" : "#667788"} />
+                            <button
+                                onClick={(e) => flipLike(e, r)}
+                                className="transition-transform hover:scale-125"
+                                data-testid={`diary-like-${r.id}`}
+                                title={r.liked ? "Unlike" : "Like"}
+                            >
+                                <Heart size={16} weight={r.liked ? "fill" : "regular"} color={r.liked ? "#FF2A79" : "#667788"} />
+                            </button>
                             {r.review && <PencilSimple size={14} color="#40BCF4" />}
                         </div>
                     </motion.div>

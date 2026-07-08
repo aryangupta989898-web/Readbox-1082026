@@ -4,7 +4,7 @@ import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Button } from "./ui/button";
 import { StarRating } from "./StarRating";
-import { UploadSimple, FilePdf } from "@phosphor-icons/react";
+import { UploadSimple, FilePdf, BookOpen, CheckCircle } from "@phosphor-icons/react";
 import { createReading } from "../lib/api";
 import { toast } from "sonner";
 
@@ -15,12 +15,16 @@ export const LogReadingDialog = ({ open, onOpenChange, onCreated }) => {
     const [readDate, setReadDate] = useState(new Date().toISOString().slice(0, 10));
     const [rating, setRating] = useState(0);
     const [review, setReview] = useState("");
+    const [status, setStatus] = useState("completed"); // "reading" | "completed"
+    const [totalPages, setTotalPages] = useState("");
+    const [pagesRead, setPagesRead] = useState("");
     const [loading, setLoading] = useState(false);
 
     const reset = () => {
         setFile(null); setTitle(""); setAuthor("");
         setReadDate(new Date().toISOString().slice(0, 10));
         setRating(0); setReview("");
+        setStatus("completed"); setTotalPages(""); setPagesRead("");
     };
 
     const submit = async () => {
@@ -33,8 +37,11 @@ export const LogReadingDialog = ({ open, onOpenChange, onCreated }) => {
             if (readDate) fd.append("read_date", readDate);
             if (rating) fd.append("rating", String(rating));
             if (review) fd.append("review", review);
+            fd.append("status", status);
+            if (totalPages) fd.append("total_pages", String(totalPages));
+            if (pagesRead) fd.append("pages_read", String(pagesRead));
             const created = await createReading(fd);
-            toast.success("Reading logged. AI synopsis generated.");
+            toast.success(status === "reading" ? "Added to Currently Reading." : "Reading logged.");
             reset(); onOpenChange(false);
             onCreated && onCreated(created);
         } catch (e) {
@@ -46,10 +53,30 @@ export const LogReadingDialog = ({ open, onOpenChange, onCreated }) => {
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="bg-[#1B2228] border-[#2C3440] text-white max-w-xl" data-testid="log-reading-dialog">
+            <DialogContent className="bg-[#1B2228] border-[#2C3440] text-white max-w-xl max-h-[90vh] overflow-y-auto" data-testid="log-reading-dialog">
                 <DialogHeader>
                     <DialogTitle className="font-heading text-2xl">Log a Reading</DialogTitle>
                 </DialogHeader>
+
+                {/* Status toggle */}
+                <div className="grid grid-cols-2 gap-2" data-testid="status-toggle">
+                    <button
+                        type="button"
+                        onClick={() => setStatus("reading")}
+                        className={`flex items-center justify-center gap-2 py-3 rounded-lg border transition ${status === "reading" ? "border-[#FF8000] bg-[#FF8000]/10 text-[#FF8000]" : "border-[#2C3440] text-[#99AABB] hover:text-white"}`}
+                        data-testid="status-reading-btn"
+                    >
+                        <BookOpen size={16} weight="fill" /> Currently Reading
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setStatus("completed")}
+                        className={`flex items-center justify-center gap-2 py-3 rounded-lg border transition ${status === "completed" ? "border-[#00E054] bg-[#00E054]/10 text-[#00E054]" : "border-[#2C3440] text-[#99AABB] hover:text-white"}`}
+                        data-testid="status-completed-btn"
+                    >
+                        <CheckCircle size={16} weight="fill" /> Completed
+                    </button>
+                </div>
 
                 <label
                     htmlFor="pdf-file-input"
@@ -91,13 +118,25 @@ export const LogReadingDialog = ({ open, onOpenChange, onCreated }) => {
                         <Input value={author} onChange={(e) => setAuthor(e.target.value)} className="bg-[#14181C] border-[#2C3440]" data-testid="author-input" />
                     </div>
                     <div>
-                        <div className="label-tag mb-1">Date Read</div>
+                        <div className="label-tag mb-1">{status === "reading" ? "Date Started" : "Date Read"}</div>
                         <Input type="date" value={readDate} onChange={(e) => setReadDate(e.target.value)} className="bg-[#14181C] border-[#2C3440]" data-testid="date-input" />
                     </div>
                     <div>
                         <div className="label-tag mb-1">Rating</div>
                         <div className="pt-2"><StarRating value={rating} onChange={setRating} size={22} testId="log-rating" /></div>
                     </div>
+                    {status === "reading" && (
+                        <>
+                            <div>
+                                <div className="label-tag mb-1">Total Pages</div>
+                                <Input type="number" min={0} value={totalPages} onChange={(e) => setTotalPages(e.target.value)} placeholder="e.g. 320" className="bg-[#14181C] border-[#2C3440]" data-testid="total-pages-input" />
+                            </div>
+                            <div>
+                                <div className="label-tag mb-1">Pages Read</div>
+                                <Input type="number" min={0} value={pagesRead} onChange={(e) => setPagesRead(e.target.value)} placeholder="e.g. 87" className="bg-[#14181C] border-[#2C3440]" data-testid="pages-read-input" />
+                            </div>
+                        </>
+                    )}
                 </div>
 
                 <div>
