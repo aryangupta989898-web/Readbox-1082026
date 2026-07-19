@@ -14,12 +14,14 @@ import { StarRating } from "../components/StarRating";
 import { TagsPicker } from "../components/TagsPicker";
 import { ProgressRing } from "../components/ProgressRing";
 import { AddToListButton } from "../components/AddToListButton";
+import { Reader } from "../components/Reader";
+import { PasteSummaryDialog } from "../components/PasteSummaryDialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { Checkbox } from "../components/ui/checkbox";
 import { Textarea } from "../components/ui/textarea";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
-import { Heart, Trash, ArrowLeft, Sparkle, Plus, Image as ImageIcon, PencilSimple, BookOpen, CheckCircle, Check } from "@phosphor-icons/react";
+import { Heart, Trash, ArrowLeft, Sparkle, Plus, Image as ImageIcon, PencilSimple, BookOpen, CheckCircle, Check, BookOpenText, ClipboardText } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 export const ReadingDetailPage = () => {
@@ -41,6 +43,8 @@ export const ReadingDetailPage = () => {
     const [editingAuthor, setEditingAuthor] = useState(false);
     const [authorDraft, setAuthorDraft] = useState("");
     const [pagesBusy, setPagesBusy] = useState(false);
+    const [readerOpen, setReaderOpen] = useState(false);
+    const [pasteSummaryOpen, setPasteSummaryOpen] = useState(false);
 
     const runSuggest = async () => {
         setSuggestBusy(true);
@@ -276,14 +280,19 @@ export const ReadingDetailPage = () => {
                         <div className="mb-4">
                             <TagsPicker tags={reading.tags || []} onChange={setTags} />
                         </div>
-                        <div className="flex items-center gap-4 mb-6">
+                        <div className="flex items-center gap-4 mb-6 flex-wrap">
                             <StarRating value={reading.rating || 0} onChange={(v) => patch({ rating: v })} size={22} testId="detail-rating" />
                             <button onClick={flipLike} className="transition-transform hover:scale-110" data-testid="like-btn">
                                 <Heart size={26} weight={reading.liked ? "fill" : "regular"} color={reading.liked ? "#FF2A79" : "#667788"} />
                             </button>
-                            {reading.storage_path && (
-                                <a href={`${process.env.REACT_APP_BACKEND_URL}/api/readings/${id}/pdf`} target="_blank" rel="noreferrer" className="text-xs uppercase tracking-widest text-[#40BCF4] hover:underline" data-testid="view-pdf-link">Open PDF</a>
-                            )}
+                            <Button
+                                onClick={() => setReaderOpen(true)}
+                                className="bg-[#40BCF4] text-[#14181C] hover:bg-[#2eabe4] font-semibold"
+                                data-testid="open-reader-btn"
+                            >
+                                <BookOpenText size={16} weight="fill" className="mr-1.5" />
+                                Open Reading
+                            </Button>
                             <button onClick={doDelete} className="ml-auto text-[#667788] hover:text-red-400 transition" data-testid="delete-btn"><Trash size={18} /></button>
                         </div>
                         <Textarea
@@ -309,11 +318,23 @@ export const ReadingDetailPage = () => {
 
                     <TabsContent value="synopsis" className="mt-6">
                         <div className="bg-[#1B2228] border border-[#2C3440] rounded-lg p-6" data-testid="synopsis-panel">
-                            <div className="label-tag mb-2 flex items-center gap-2"><Sparkle size={12} color="#00E054" weight="fill"/> AI Synopsis</div>
+                            <div className="flex items-center justify-between mb-3">
+                                <div className="label-tag flex items-center gap-2"><Sparkle size={12} color="#00E054" weight="fill"/> Synopsis</div>
+                                <Button
+                                    onClick={() => setPasteSummaryOpen(true)}
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-[#2C3440] bg-transparent text-white hover:bg-[#2C3440]"
+                                    data-testid="paste-summary-btn"
+                                >
+                                    <ClipboardText size={13} className="mr-1.5" />
+                                    {reading.synopsis ? "Edit / Paste Summary" : "Paste Your Summary"}
+                                </Button>
+                            </div>
                             {reading.synopsis ? (
-                                <p className="text-[#c8d3de] leading-relaxed">{reading.synopsis}</p>
+                                <p className="text-[#c8d3de] leading-relaxed whitespace-pre-wrap">{reading.synopsis}</p>
                             ) : (
-                                <p className="text-[#667788] italic">No synopsis available (upload a PDF to enable AI analysis).</p>
+                                <p className="text-[#667788] italic">No synopsis yet. Upload a PDF or paste your own summary above.</p>
                             )}
                         </div>
                     </TabsContent>
@@ -474,6 +495,23 @@ export const ReadingDetailPage = () => {
                     </TabsContent>
                 </Tabs>
             </div>
+
+            {readerOpen && (
+                <Reader
+                    readingId={id}
+                    title={reading.title}
+                    author={reading.author}
+                    onClose={() => setReaderOpen(false)}
+                    onHighlightAdded={(h) => setHighlights((prev) => [...prev, h])}
+                />
+            )}
+
+            <PasteSummaryDialog
+                open={pasteSummaryOpen}
+                onOpenChange={setPasteSummaryOpen}
+                currentSynopsis={reading.synopsis}
+                onSave={async (value) => { await patch({ synopsis: value }); }}
+            />
         </div>
     );
 };

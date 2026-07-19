@@ -94,6 +94,7 @@ class ReadingUpdate(BaseModel):
     status: Optional[str] = None
     total_pages: Optional[int] = None
     pages_read: Optional[int] = None
+    synopsis: Optional[str] = None
 
 
 class HighlightCreate(BaseModel):
@@ -228,6 +229,7 @@ async def shutdown_db_client():
 @api_router.post("/readings")
 async def create_reading(
     file: Optional[UploadFile] = File(None),
+    text_content: Optional[str] = Form(None),
     title: Optional[str] = Form(None),
     author: Optional[str] = Form(None),
     read_date: Optional[str] = Form(None),
@@ -242,6 +244,7 @@ async def create_reading(
     storage_path = None
     pdf_text = ""
     file_name = None
+    source_type = "manual"
 
     if file:
         data = await file.read()
@@ -255,6 +258,11 @@ async def create_reading(
             raise HTTPException(status_code=500, detail="File upload failed")
         pdf_text = extract_pdf_text(data)
         file_name = file.filename
+        source_type = "pdf"
+    elif text_content and text_content.strip():
+        # Pasted text reading — preserve words exactly, only normalize excessive whitespace
+        pdf_text = text_content.strip()[:200000]
+        source_type = "text"
 
     inferred_title = title or (file_name.rsplit(".", 1)[0] if file_name else "Untitled Reading")
 
@@ -276,6 +284,7 @@ async def create_reading(
         "storage_path": storage_path,
         "file_name": file_name,
         "pdf_text": pdf_text,
+        "source_type": source_type,
         "synopsis": "",
         "cover_color": _pick_color(inferred_title),
         "created_at": now_iso(),
@@ -368,6 +377,19 @@ async def get_reading_pdf(reading_id: str):
         raise HTTPException(status_code=404, detail="File not found")
     data, ct = get_object(doc["storage_path"])
     return Response(content=data, media_type=ct)
+
+
+@api_router.get("/readings/{reading_id}/content")
+async def get_reading_content(reading_id: str):
+    """Return the raw text content for the in-app Reader (extracted from PDF or pasted text)."""
+    doc = await db.readings.find_one({"id": reading_id, "user_id": DEFAULT_USER})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Not found")
+    return {
+        "text": doc.get("pdf_text") or "",
+        "source_type": doc.get("source_type") or ("pdf" if doc.get("storage_path") else "manual"),
+        "has_pdf": bool(doc.get("storage_path")),
+    }
 
 
 # ============ Checklist (AI topic checklist) ============
