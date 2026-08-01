@@ -51,6 +51,27 @@
   }
   .status.ok { color: #00E054; }
   .status.err { color: #FF2A79; }
+  .ghost {
+    width: 100%;
+    background: transparent;
+    color: #99AABB;
+    padding: 8px;
+    font-size: 11px;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    margin-top: 8px;
+  }
+  .ghost:hover { color: #fff; }
+  .hint {
+    font-size: 10px;
+    color: #667788;
+    line-height: 1.5;
+    margin-top: 10px;
+    padding: 8px;
+    background: #14181C;
+    border-radius: 6px;
+    border-left: 2px solid #40BCF4;
+  }
   .link {
     display: block;
     margin-top: 10px;
@@ -91,11 +112,17 @@
   </div>
 
   <div class="actions">
-    <button class="primary" id="save-page-btn" data-testid="popup-save-page">Save Reading</button>
+    <button class="primary" id="save-pdf-btn" data-testid="popup-save-pdf">Save as PDF</button>
     <button class="secondary" id="save-selection-btn" data-testid="popup-save-selection" disabled>Save Selection</button>
   </div>
 
+  <button class="ghost" id="save-page-text-btn" data-testid="popup-save-text">Save text only (no PDF)</button>
+
   <div class="status" id="status" data-testid="popup-status"></div>
+
+  <div class="hint" id="hint">
+    Save as PDF snapshots the page exactly as you see it — ads, layout, colors. Chrome will briefly show a "debugging this browser" banner while it prints.
+  </div>
 
   <a class="link" href="#" id="open-options-2">⚙ Extension settings</a>
   <a class="link" href="#" id="open-readbox">Open Readbox library →</a>

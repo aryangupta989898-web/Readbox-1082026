@@ -23,6 +23,46 @@ async function api(path, body) {
     return res.json();
 }
 
+async function apiMultipart(path, formData) {
+    const { token, backend } = await getConfig();
+    if (!token) throw new Error("Readbox not connected — open the extension options and paste your token.");
+    const res = await fetch(`${backend}/api${path}`, {
+        method: "POST",
+        headers: { "X-Readbox-Token": token },
+        body: formData,
+    });
+    if (!res.ok) {
+        const t = await res.text();
+        throw new Error(`Readbox: ${res.status} ${t.slice(0, 120)}`);
+    }
+    return res.json();
+}
+
+function base64ToBlob(b64, mime) {
+    const byteChars = atob(b64);
+    const arr = new Uint8Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) arr[i] = byteChars.charCodeAt(i);
+    return new Blob([arr], { type: mime });
+}
+
+async function printTabToPdf(tabId) {
+    const target = { tabId };
+    await chrome.debugger.attach(target, "1.3");
+    try {
+        const result = await chrome.debugger.sendCommand(target, "Page.printToPDF", {
+            printBackground: true,
+            preferCSSPageSize: true,
+            marginTop: 0.4,
+            marginBottom: 0.4,
+            marginLeft: 0.4,
+            marginRight: 0.4,
+        });
+        return result.data; // base64
+    } finally {
+        try { await chrome.debugger.detach(target); } catch (_) {}
+    }
+}
+
 function notify(message, isError = false) {
     chrome.notifications?.create({
         type: "basic",
@@ -84,6 +124,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         try {
             if (msg.type === "save-page") {
                 const r = await api("/extension/save-page", msg.payload);
+                sendResponse({ ok: true, data: r });
+            } else if (msg.type === "save-page-pdf") {
+                // Snapshot rendered tab as PDF via CDP, then upload as multipart.
+                const { tabId, url, title, author, text, site_name } = msg.payload;
+                const b64 = await printTabToPdf(tabId);
+                const blob = base64ToBlob(b64, "application/pdf");
+                const fd = new FormData();
+                fd.append("file", blob, `${(title || "page").replace(/[^\w\-]+/g, "_").slice(0, 80)}.pdf`);
+                fd.append("url", url || "");
+                fd.append("title", title || "");
+                fd.append("author", author || "");
+                fd.append("text", text || "");
+                fd.append("site_name", site_name || "");
+                const r = await apiMultipart("/extension/save-page-pdf", fd);
                 sendResponse({ ok: true, data: r });
             } else if (msg.type === "save-highlight") {
                 const r = await api("/extension/save-highlight", msg.payload);

@@ -41,6 +41,12 @@ function setStatus(text, kind) {
     el.className = "status " + (kind || "");
 }
 
+function disableAll(disabled) {
+    document.getElementById("save-pdf-btn").disabled = disabled;
+    document.getElementById("save-page-text-btn").disabled = disabled;
+    document.getElementById("save-selection-btn").disabled = disabled;
+}
+
 async function init() {
     const manifest = chrome.runtime.getManifest();
     document.getElementById("version").textContent = "v" + manifest.version;
@@ -52,7 +58,8 @@ async function init() {
     const connected = await checkConnected();
     if (!connected) {
         document.getElementById("not-connected").style.display = "block";
-        document.getElementById("save-page-btn").disabled = true;
+        document.getElementById("save-pdf-btn").disabled = true;
+        document.getElementById("save-page-text-btn").disabled = true;
     }
 
     const selection = await getSelectionOnPage(tab);
@@ -62,16 +69,40 @@ async function init() {
     }
 
     // Guard: refuse to save chrome:// / new tab
-    if (!tab?.url || /^(chrome|chrome-extension|about|edge|brave):\/\//.test(tab.url)) {
-        document.getElementById("save-page-btn").disabled = true;
+    if (!tab?.url || /^(chrome|chrome-extension|about|edge|brave|file):\/\//.test(tab.url)) {
+        disableAll(true);
         setStatus("Can't save this page (internal URL)", "err");
+        return;
     }
 
-    document.getElementById("save-page-btn").addEventListener("click", async () => {
-        setStatus("Extracting article…");
-        document.getElementById("save-page-btn").disabled = true;
+    document.getElementById("save-pdf-btn").addEventListener("click", async () => {
+        setStatus("Extracting article & printing PDF… hold on");
+        disableAll(true);
         const article = await extractOnPage(tab);
-        setStatus("Saving to Readbox…");
+        const resp = await chrome.runtime.sendMessage({
+            type: "save-page-pdf",
+            payload: {
+                tabId: tab.id,
+                url: tab.url,
+                title: article?.title || tab.title || "",
+                author: article?.author || "",
+                text: article?.text || "",
+                site_name: article?.site_name || new URL(tab.url).hostname,
+            },
+        });
+        if (resp?.ok) {
+            setStatus(resp.data.created ? "✓ Saved as PDF" : "✓ Updated existing reading", "ok");
+            setTimeout(() => window.close(), 900);
+        } else {
+            setStatus(resp?.error || "Failed", "err");
+            disableAll(false);
+        }
+    });
+
+    document.getElementById("save-page-text-btn").addEventListener("click", async () => {
+        setStatus("Saving article text…");
+        disableAll(true);
+        const article = await extractOnPage(tab);
         const resp = await chrome.runtime.sendMessage({
             type: "save-page",
             payload: {
@@ -79,15 +110,15 @@ async function init() {
                 title: article?.title || tab.title || "",
                 author: article?.author || "",
                 text: article?.text || "",
-                site_name: article?.site_name || "",
+                site_name: article?.site_name || new URL(tab.url).hostname,
             },
         });
         if (resp?.ok) {
-            setStatus(resp.data.created ? "✓ Saved to Readbox" : "✓ Already in Readbox", "ok");
+            setStatus(resp.data.created ? "✓ Text saved" : "✓ Already in Readbox", "ok");
             setTimeout(() => window.close(), 900);
         } else {
             setStatus(resp?.error || "Failed", "err");
-            document.getElementById("save-page-btn").disabled = false;
+            disableAll(false);
         }
     });
 

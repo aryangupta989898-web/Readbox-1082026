@@ -21,7 +21,7 @@ import { Checkbox } from "../components/ui/checkbox";
 import { Textarea } from "../components/ui/textarea";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
-import { Heart, Trash, ArrowLeft, Sparkle, Plus, Image as ImageIcon, PencilSimple, BookOpen, CheckCircle, Check, BookOpenText, ClipboardText } from "@phosphor-icons/react";
+import { Heart, Trash, ArrowLeft, Sparkle, Plus, Image as ImageIcon, PencilSimple, BookOpen, CheckCircle, Check, BookOpenText, ClipboardText, ArrowSquareOut } from "@phosphor-icons/react";
 import { toast } from "sonner";
 
 export const ReadingDetailPage = () => {
@@ -234,6 +234,20 @@ export const ReadingDetailPage = () => {
                                     <PencilSimple size={14} />
                                 </button>
                             </div>
+                        )}
+
+                        {reading.source_url && (
+                            <a
+                                href={reading.source_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1.5 text-xs text-[#40BCF4] hover:text-white transition mb-4 border-b border-[#40BCF4]/30 hover:border-white pb-0.5"
+                                data-testid="source-url-link"
+                                title={reading.source_url}
+                            >
+                                <ArrowSquareOut size={12} weight="bold" />
+                                Read at <span className="italic">{reading.site_name || (() => { try { return new URL(reading.source_url).hostname.replace(/^www\./, ""); } catch { return "source"; } })()}</span>
+                            </a>
                         )}
 
                         {/* Status control */}

@@ -19,6 +19,8 @@ export const Reader = ({ readingId, title, author, onClose, onHighlightAdded }) 
     const [text, setText] = useState("");
     const [sourceType, setSourceType] = useState("manual");
     const [hasPdf, setHasPdf] = useState(false);
+    const [sourceUrl, setSourceUrl] = useState("");
+    const [siteName, setSiteName] = useState("");
     const [fontSize, setFontSize] = useState(18);
     const [loading, setLoading] = useState(true);
     const [selection, setSelection] = useState(null); // { text, x, y }
@@ -37,6 +39,8 @@ export const Reader = ({ readingId, title, author, onClose, onHighlightAdded }) 
                 setText(data.text || "");
                 setSourceType(data.source_type || "manual");
                 setHasPdf(Boolean(data.has_pdf));
+                setSourceUrl(data.source_url || "");
+                setSiteName(data.site_name || "");
             } catch {
                 if (live) toast.error("Failed to load reading content");
             } finally {
@@ -150,6 +154,21 @@ export const Reader = ({ readingId, title, author, onClose, onHighlightAdded }) 
                             data-testid="reader-font-bigger"
                         ><PlusIcon size={12} /></button>
                     </div>
+                )}
+
+                {/* Open source URL — text mode with a source */}
+                {!hasPdf && sourceUrl && (
+                    <a
+                        href={sourceUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-[#40BCF4] hover:text-white transition border border-[#2C3440] px-3 py-1.5 rounded-full hover:bg-[#1B2228]"
+                        data-testid="reader-open-source"
+                        title={sourceUrl}
+                    >
+                        <ArrowUpRight size={12} />
+                        <span className="hidden sm:inline">{siteName ? `Open on ${siteName}` : "Open source"}</span>
+                    </a>
                 )}
 
                 {/* Open in new tab — only for PDF */}

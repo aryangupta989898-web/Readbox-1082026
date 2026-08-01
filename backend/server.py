@@ -407,6 +407,8 @@ async def get_reading_content(reading_id: str):
         "text": doc.get("pdf_text") or "",
         "source_type": doc.get("source_type") or ("pdf" if doc.get("storage_path") else "manual"),
         "has_pdf": bool(doc.get("storage_path")),
+        "source_url": doc.get("source_url") or "",
+        "site_name": doc.get("site_name") or "",
     }
 
 
@@ -1224,6 +1226,83 @@ async def ext_save_page(payload: ExtSavePage, x_readbox_token: Optional[str] = H
         await db.highlights.insert_one(dict(h))
         highlight = h
     return {"reading": reading, "created": created, "highlight": highlight}
+
+
+@api_router.post("/extension/save-page-pdf")
+async def ext_save_page_pdf(
+    file: UploadFile = File(...),
+    url: str = Form(...),
+    title: Optional[str] = Form(None),
+    author: Optional[str] = Form(None),
+    text: Optional[str] = Form(None),
+    site_name: Optional[str] = Form(None),
+    x_readbox_token: Optional[str] = Header(None),
+):
+    """Save the tab's rendered PDF (from chrome.debugger printToPDF) as a reading.
+    If a reading already exists for the URL, attach the PDF to it (upgrading text-only readings)."""
+    await _verify_ext_token(x_readbox_token)
+    data = await file.read()
+    if not data or not data.startswith(b"%PDF"):
+        raise HTTPException(status_code=400, detail="Uploaded file is not a valid PDF")
+
+    existing = await db.readings.find_one({"user_id": DEFAULT_USER, "source_url": url})
+    reading_id = existing["id"] if existing else str(uuid.uuid4())
+    storage_path = f"{APP_NAME}/uploads/{DEFAULT_USER}/{reading_id}.pdf"
+    try:
+        result = put_object(storage_path, data, "application/pdf")
+        storage_path = result["path"]
+    except Exception as e:
+        logger.error(f"PDF upload failed: {e}")
+        raise HTTPException(status_code=500, detail="PDF upload failed")
+
+    inferred_title = (title or (url.split("//", 1)[-1])).strip()[:250]
+    body = (text or "").strip()[:200000]
+    now = now_iso()
+
+    if existing:
+        update_fields = {
+            "storage_path": storage_path,
+            "file_name": f"{inferred_title}.pdf",
+            "source_type": "extension",
+            "site_name": site_name or existing.get("site_name") or "",
+            "updated_at": now,
+        }
+        # Only fill text if we didn't have any before
+        if not (existing.get("pdf_text") or "").strip() and body:
+            update_fields["pdf_text"] = body
+        if not (existing.get("author") or "").strip() and author:
+            update_fields["author"] = author.strip()[:120]
+        if not (existing.get("title") or "").strip() or existing.get("title") == existing.get("source_url"):
+            update_fields["title"] = inferred_title
+        await db.readings.update_one({"id": reading_id, "user_id": DEFAULT_USER}, {"$set": update_fields})
+        doc = await db.readings.find_one({"id": reading_id, "user_id": DEFAULT_USER}, {"_id": 0, "pdf_text": 0})
+        return {"reading": normalize_reading(doc), "created": False}
+
+    reading = {
+        "id": reading_id,
+        "user_id": DEFAULT_USER,
+        "title": inferred_title,
+        "author": (author or site_name or "").strip()[:120],
+        "read_date": now[:10],
+        "rating": None,
+        "review": "",
+        "liked": False,
+        "status": "completed",
+        "total_pages": None,
+        "pages_read": None,
+        "storage_path": storage_path,
+        "file_name": f"{inferred_title}.pdf",
+        "pdf_text": body,
+        "source_type": "extension",
+        "source_url": url,
+        "site_name": site_name or "",
+        "synopsis": "",
+        "cover_color": _pick_color(inferred_title),
+        "created_at": now,
+        "updated_at": now,
+    }
+    await db.readings.insert_one(reading)
+    return {"reading": strip_id({**reading}), "created": True}
 
 
 @api_router.post("/extension/save-highlight")
