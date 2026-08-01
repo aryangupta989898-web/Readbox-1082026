@@ -21,6 +21,7 @@ export const toggleChecklist = (itemId, checked) => api.patch(`/checklist/${item
 
 export const generateNotes = (id) => api.post(`/readings/${id}/notes/generate`).then((r) => r.data);
 export const fetchNotes = (id) => api.get(`/readings/${id}/notes`).then((r) => r.data);
+export const saveUserNotes = (id, content) => api.put(`/readings/${id}/notes`, { content }).then((r) => r.data);
 
 export const createHighlight = (id, payload) => api.post(`/readings/${id}/highlights`, payload).then((r) => r.data);
 export const fetchHighlights = (id) => api.get(`/readings/${id}/highlights`).then((r) => r.data);

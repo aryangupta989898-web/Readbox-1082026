@@ -1,22 +1,24 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, ArrowUpRight, FilePdf, TextAlignLeft, Minus, Plus as PlusIcon, Bookmark, Check } from "@phosphor-icons/react";
+import { X, ArrowUpRight, Minus, Plus as PlusIcon, Bookmark, Check } from "@phosphor-icons/react";
 import { api, API } from "../lib/api";
 import { toast } from "sonner";
 
 /**
  * Reader — full-screen, same-tab reading experience.
- * Two modes:
- *   - "text" (default) — beautifully typeset extracted content. Fully highlight-from-selection.
- *   - "pdf"            — iframe of the original PDF (only for readings uploaded as PDF).
  *
- * Text selection triggers a floating "Add as highlight" button.
+ * Behavior split by source:
+ *   - PDF readings (has_pdf === true): show the ORIGINAL PDF in an iframe.
+ *     Native browser controls (zoom, page nav, print). No prose conversion.
+ *     Highlighting-from-selection is NOT supported for PDF (browser plugin
+ *     isolates selection); users copy & paste into the detail-page highlight box.
+ *   - Text-only readings (no PDF, pasted text): show auto-formatted prose with
+ *     select-any-passage → floating "Add as highlight" popup.
  */
 export const Reader = ({ readingId, title, author, onClose, onHighlightAdded }) => {
     const [text, setText] = useState("");
     const [sourceType, setSourceType] = useState("manual");
     const [hasPdf, setHasPdf] = useState(false);
-    const [mode, setMode] = useState("text");
     const [fontSize, setFontSize] = useState(18);
     const [loading, setLoading] = useState(true);
     const [selection, setSelection] = useState(null); // { text, x, y }
@@ -35,8 +37,6 @@ export const Reader = ({ readingId, title, author, onClose, onHighlightAdded }) 
                 setText(data.text || "");
                 setSourceType(data.source_type || "manual");
                 setHasPdf(Boolean(data.has_pdf));
-                // Default to PDF mode if we have a PDF and no extracted text
-                if (data.has_pdf && !(data.text || "").trim()) setMode("pdf");
             } catch {
                 if (live) toast.error("Failed to load reading content");
             } finally {
@@ -46,7 +46,7 @@ export const Reader = ({ readingId, title, author, onClose, onHighlightAdded }) 
         return () => { live = false; };
     }, [readingId]);
 
-    // Lock body scroll while open
+    // Lock body scroll while open + ESC to close
     useEffect(() => {
         const prev = document.body.style.overflow;
         document.body.style.overflow = "hidden";
@@ -58,15 +58,14 @@ export const Reader = ({ readingId, title, author, onClose, onHighlightAdded }) 
         };
     }, [onClose]);
 
-    // Selection handler — only in text mode
+    // Selection handler — only for text mode (no PDF)
     useEffect(() => {
-        if (mode !== "text") { setSelection(null); return; }
+        if (hasPdf) { setSelection(null); return; }
         const handler = () => {
             const sel = window.getSelection();
             if (!sel || sel.isCollapsed) { setSelection(null); return; }
             const selectedText = sel.toString().trim();
             if (!selectedText || selectedText.length < 4) { setSelection(null); return; }
-            // Ensure the selection is inside our prose container
             if (!proseRef.current) return;
             const range = sel.getRangeAt(0);
             if (!proseRef.current.contains(range.commonAncestorContainer)) { setSelection(null); return; }
@@ -83,7 +82,7 @@ export const Reader = ({ readingId, title, author, onClose, onHighlightAdded }) 
             document.removeEventListener("mouseup", handler);
             document.removeEventListener("touchend", handler);
         };
-    }, [mode]);
+    }, [hasPdf]);
 
     const saveHighlight = async () => {
         if (!selection?.text) return;
@@ -104,12 +103,11 @@ export const Reader = ({ readingId, title, author, onClose, onHighlightAdded }) 
     // Format text into paragraphs preserving words exactly
     const paragraphs = useMemo(() => {
         if (!text) return [];
-        // Split on 2+ newlines OR single newline followed by capital letter/blank line group
-        return text.split(/\n\s*\n/).map((p) => p.replace(/\s+\n/g, " ").trim()).filter(Boolean);
+        return text
+            .split(/\n\s*\n+/)
+            .map((p) => p.replace(/[ \t]*\n[ \t]*/g, " ").trim())
+            .filter(Boolean);
     }, [text]);
-
-    const canShowPdf = hasPdf;
-    const canShowText = Boolean(text && text.trim());
 
     return createPortal(
         <div className="fixed inset-0 z-[100] bg-[#0F1216] flex flex-col" data-testid="reader-overlay">
@@ -124,33 +122,19 @@ export const Reader = ({ readingId, title, author, onClose, onHighlightAdded }) 
                     <X size={20} />
                 </button>
                 <div className="flex-1 min-w-0">
-                    <div className="text-[10px] uppercase tracking-[0.2em] text-[#667788]">Reading</div>
+                    <div className="text-[10px] uppercase tracking-[0.2em] text-[#667788]">
+                        {hasPdf ? "PDF · Native View" : sourceType === "text" ? "Pasted Text" : "Reading"}
+                    </div>
                     <div className="text-sm text-white truncate font-medium" data-testid="reader-title">{title}</div>
-                    {author && <div className="text-xs text-[#99AABB] italic truncate" style={{ fontFamily: "Cormorant Garamond, serif" }}>by {author}</div>}
+                    {author && (
+                        <div className="text-xs text-[#99AABB] italic truncate" style={{ fontFamily: "Cormorant Garamond, serif" }}>
+                            by {author}
+                        </div>
+                    )}
                 </div>
 
-                {/* Mode toggle */}
-                {canShowText && canShowPdf && (
-                    <div className="hidden sm:flex items-center gap-1 bg-[#1B2228] border border-[#2C3440] rounded-full p-1" data-testid="reader-mode-toggle">
-                        <button
-                            onClick={() => setMode("text")}
-                            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs transition ${mode === "text" ? "bg-[#00E054] text-[#14181C] font-medium" : "text-[#99AABB] hover:text-white"}`}
-                            data-testid="reader-text-mode-btn"
-                        >
-                            <TextAlignLeft size={12} />Prose
-                        </button>
-                        <button
-                            onClick={() => setMode("pdf")}
-                            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs transition ${mode === "pdf" ? "bg-[#00E054] text-[#14181C] font-medium" : "text-[#99AABB] hover:text-white"}`}
-                            data-testid="reader-pdf-mode-btn"
-                        >
-                            <FilePdf size={12} />Original
-                        </button>
-                    </div>
-                )}
-
-                {/* Font size (only prose) */}
-                {mode === "text" && canShowText && (
+                {/* Font size — only for text mode */}
+                {!hasPdf && text && (
                     <div className="hidden md:flex items-center gap-1 bg-[#1B2228] border border-[#2C3440] rounded-full px-2 py-1" data-testid="reader-font-controls">
                         <button
                             onClick={() => setFontSize((s) => Math.max(14, s - 2))}
@@ -168,7 +152,7 @@ export const Reader = ({ readingId, title, author, onClose, onHighlightAdded }) 
                     </div>
                 )}
 
-                {/* Open in new tab (only PDF) */}
+                {/* Open in new tab — only for PDF */}
                 {hasPdf && (
                     <a
                         href={pdfUrl}
@@ -183,18 +167,25 @@ export const Reader = ({ readingId, title, author, onClose, onHighlightAdded }) 
                 )}
             </div>
 
+            {/* PDF hint bar */}
+            {hasPdf && (
+                <div className="px-4 md:px-8 py-1.5 text-[10px] uppercase tracking-[0.2em] text-[#667788] bg-[#14181C] border-b border-[#1F262E]" data-testid="reader-pdf-hint">
+                    Original layout preserved · Copy any passage and paste it into the highlights box on the detail page
+                </div>
+            )}
+
             {/* Body */}
             <div className="flex-1 overflow-hidden relative">
                 {loading ? (
                     <div className="h-full flex items-center justify-center text-[#667788]" data-testid="reader-loading">Loading…</div>
-                ) : mode === "pdf" && canShowPdf ? (
+                ) : hasPdf ? (
                     <iframe
                         src={pdfUrl + "#toolbar=1&view=FitH"}
                         title={title}
                         className="w-full h-full bg-white"
                         data-testid="reader-pdf-iframe"
                     />
-                ) : canShowText ? (
+                ) : text && text.trim() ? (
                     <div className="h-full overflow-y-auto" data-testid="reader-prose-scroll">
                         <div
                             ref={proseRef}
@@ -204,9 +195,7 @@ export const Reader = ({ readingId, title, author, onClose, onHighlightAdded }) 
                         >
                             <div className="mb-10 pb-6 border-b border-[#2C3440]">
                                 <div className="text-[10px] uppercase tracking-[0.2em] text-[#667788] mb-2" style={{ fontFamily: "Inter, sans-serif" }}>
-                                    {sourceType === "text" ? "Pasted Text" : sourceType === "pdf" ? "PDF" : "Reading"}
-                                    <span className="mx-2">·</span>
-                                    Select any passage to add as highlight
+                                    Pasted Text · Select any passage to add as highlight
                                 </div>
                                 <h1 className="text-3xl md:text-4xl font-semibold text-white leading-tight">{title}</h1>
                                 {author && <div className="italic text-[#99AABB] mt-2">by {author}</div>}
@@ -216,28 +205,16 @@ export const Reader = ({ readingId, title, author, onClose, onHighlightAdded }) 
                                     {p}
                                 </p>
                             ))}
-                            {paragraphs.length === 0 && (
-                                <div className="text-[#667788] italic text-center py-24" style={{ fontFamily: "Inter, sans-serif" }}>
-                                    No text content available for this reading.
-                                </div>
-                            )}
                         </div>
                     </div>
-                ) : hasPdf ? (
-                    <iframe
-                        src={pdfUrl + "#toolbar=1&view=FitH"}
-                        title={title}
-                        className="w-full h-full bg-white"
-                        data-testid="reader-pdf-iframe"
-                    />
                 ) : (
                     <div className="h-full flex items-center justify-center text-[#667788] italic px-8 text-center" data-testid="reader-empty">
                         No readable content. Upload a PDF or paste text to enable the in-app reader.
                     </div>
                 )}
 
-                {/* Floating selection popup */}
-                {selection && mode === "text" && (
+                {/* Floating selection popup — text mode only */}
+                {selection && !hasPdf && (
                     <button
                         onClick={saveHighlight}
                         disabled={saving}

@@ -494,6 +494,28 @@ async def get_notes(reading_id: str):
     return doc or None
 
 
+@api_router.put("/readings/{reading_id}/notes")
+async def save_user_notes(reading_id: str, payload: dict):
+    """Save user-pasted notes (bypasses AI). Replaces any existing notes for this reading."""
+    content = (payload.get("content") or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="Content is required")
+    doc = await db.readings.find_one({"id": reading_id, "user_id": DEFAULT_USER})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Reading not found")
+    entry = {
+        "id": str(uuid.uuid4()),
+        "reading_id": reading_id,
+        "content": content[:20000],
+        "topics": [],
+        "source": "user",
+        "created_at": now_iso(),
+    }
+    await db.notes.delete_many({"reading_id": reading_id})
+    await db.notes.insert_one(dict(entry))
+    return entry
+
+
 # ============ Highlights ============
 @api_router.post("/readings/{reading_id}/highlights")
 async def create_highlight(reading_id: str, h: HighlightCreate):

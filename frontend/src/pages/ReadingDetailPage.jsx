@@ -15,7 +15,7 @@ import { TagsPicker } from "../components/TagsPicker";
 import { ProgressRing } from "../components/ProgressRing";
 import { AddToListButton } from "../components/AddToListButton";
 import { Reader } from "../components/Reader";
-import { PasteSummaryDialog } from "../components/PasteSummaryDialog";
+import { PasteNotesDialog } from "../components/PasteNotesDialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 import { Checkbox } from "../components/ui/checkbox";
 import { Textarea } from "../components/ui/textarea";
@@ -44,7 +44,7 @@ export const ReadingDetailPage = () => {
     const [authorDraft, setAuthorDraft] = useState("");
     const [pagesBusy, setPagesBusy] = useState(false);
     const [readerOpen, setReaderOpen] = useState(false);
-    const [pasteSummaryOpen, setPasteSummaryOpen] = useState(false);
+    const [pasteNotesOpen, setPasteNotesOpen] = useState(false);
 
     const runSuggest = async () => {
         setSuggestBusy(true);
@@ -318,23 +318,11 @@ export const ReadingDetailPage = () => {
 
                     <TabsContent value="synopsis" className="mt-6">
                         <div className="bg-[#1B2228] border border-[#2C3440] rounded-lg p-6" data-testid="synopsis-panel">
-                            <div className="flex items-center justify-between mb-3">
-                                <div className="label-tag flex items-center gap-2"><Sparkle size={12} color="#00E054" weight="fill"/> Synopsis</div>
-                                <Button
-                                    onClick={() => setPasteSummaryOpen(true)}
-                                    variant="outline"
-                                    size="sm"
-                                    className="border-[#2C3440] bg-transparent text-white hover:bg-[#2C3440]"
-                                    data-testid="paste-summary-btn"
-                                >
-                                    <ClipboardText size={13} className="mr-1.5" />
-                                    {reading.synopsis ? "Edit / Paste Summary" : "Paste Your Summary"}
-                                </Button>
-                            </div>
+                            <div className="label-tag mb-2 flex items-center gap-2"><Sparkle size={12} color="#00E054" weight="fill"/> AI Synopsis</div>
                             {reading.synopsis ? (
                                 <p className="text-[#c8d3de] leading-relaxed whitespace-pre-wrap">{reading.synopsis}</p>
                             ) : (
-                                <p className="text-[#667788] italic">No synopsis yet. Upload a PDF or paste your own summary above.</p>
+                                <p className="text-[#667788] italic">No synopsis available (upload a PDF or paste text to enable AI analysis).</p>
                             )}
                         </div>
                     </TabsContent>
@@ -381,19 +369,37 @@ export const ReadingDetailPage = () => {
 
                     <TabsContent value="notes" className="mt-6">
                         <div className="bg-[#1B2228] border border-[#2C3440] rounded-lg p-6" data-testid="notes-panel">
-                            <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
                                 <div>
                                     <div className="label-tag mb-1">AI Summary Notes</div>
-                                    <div className="text-xs text-[#99AABB]">Generated from your checked topics.</div>
+                                    <div className="text-xs text-[#99AABB]">Generated from your checked topics — or paste your own.</div>
                                 </div>
-                                <Button onClick={runNotes} disabled={busy==="notes"} className="bg-[#00E054] text-[#14181C] hover:bg-[#00c94a]" data-testid="gen-notes-btn">
-                                    <Sparkle size={14} className="mr-1"/>{notes ? "Regenerate" : "Generate"}
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        onClick={() => setPasteNotesOpen(true)}
+                                        variant="outline"
+                                        size="sm"
+                                        className="border-[#2C3440] bg-transparent text-white hover:bg-[#2C3440]"
+                                        data-testid="paste-notes-btn"
+                                    >
+                                        <ClipboardText size={13} className="mr-1.5" />
+                                        {notes ? "Paste / Replace" : "Paste Your Own"}
+                                    </Button>
+                                    <Button onClick={runNotes} disabled={busy==="notes"} className="bg-[#00E054] text-[#14181C] hover:bg-[#00c94a]" data-testid="gen-notes-btn">
+                                        <Sparkle size={14} className="mr-1"/>{notes ? "Regenerate" : "Generate"}
+                                    </Button>
+                                </div>
                             </div>
                             {notes ? (
-                                <NotesRenderer content={notes.content} />
+                                notes.source === "user" ? (
+                                    <div className="prose-essay space-y-5 text-[#c8d3de] leading-[1.85] whitespace-pre-wrap" data-testid="user-notes-content">
+                                        {notes.content}
+                                    </div>
+                                ) : (
+                                    <NotesRenderer content={notes.content} />
+                                )
                             ) : (
-                                <div className="text-[#667788] italic text-sm">Check some topics on the Checklist tab, then click Generate.</div>
+                                <div className="text-[#667788] italic text-sm">Check some topics on the Checklist tab and Generate — or click Paste Your Own.</div>
                             )}
                         </div>
                     </TabsContent>
@@ -506,11 +512,15 @@ export const ReadingDetailPage = () => {
                 />
             )}
 
-            <PasteSummaryDialog
-                open={pasteSummaryOpen}
-                onOpenChange={setPasteSummaryOpen}
-                currentSynopsis={reading.synopsis}
-                onSave={async (value) => { await patch({ synopsis: value }); }}
+            <PasteNotesDialog
+                open={pasteNotesOpen}
+                onOpenChange={setPasteNotesOpen}
+                hasExisting={Boolean(notes)}
+                onSave={async (content) => {
+                    const { saveUserNotes } = await import("../lib/api");
+                    const saved = await saveUserNotes(id, content);
+                    setNotes(saved);
+                }}
             />
         </div>
     );
