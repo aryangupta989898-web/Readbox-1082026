@@ -1,10 +1,11 @@
-from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, Response, Form
+from fastapi import FastAPI, APIRouter, UploadFile, File, HTTPException, Response, Form, Header
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 import io
+import zipfile
 import json
 import re
 import uuid
@@ -147,6 +148,23 @@ class WishlistUpdate(BaseModel):
     title: Optional[str] = None
     author: Optional[str] = None
     notes: Optional[str] = None
+
+
+class ExtSavePage(BaseModel):
+    url: str
+    title: Optional[str] = None
+    author: Optional[str] = None
+    text: Optional[str] = None
+    selected_text: Optional[str] = None
+    site_name: Optional[str] = None
+
+
+class ExtSaveHighlight(BaseModel):
+    url: str
+    text: str
+    title: Optional[str] = None
+    note: Optional[str] = None
+    site_name: Optional[str] = None
 
 
 # ============ Helpers ============
@@ -1086,6 +1104,147 @@ async def convert_wishlist_to_reading(item_id: str, status: str = "reading"):
 @api_router.get("/")
 async def root():
     return {"message": "Readbox API"}
+
+
+# ============ Chrome Extension ============
+async def _get_or_create_ext_token() -> str:
+    doc = await db.settings.find_one({"_id": "extension"})
+    if doc and doc.get("token"):
+        return doc["token"]
+    token = uuid.uuid4().hex + uuid.uuid4().hex[:16]  # 48 chars
+    await db.settings.update_one(
+        {"_id": "extension"},
+        {"$set": {"token": token, "user_id": DEFAULT_USER, "created_at": now_iso()}},
+        upsert=True,
+    )
+    return token
+
+
+async def _verify_ext_token(token: Optional[str]) -> str:
+    if not token:
+        raise HTTPException(status_code=401, detail="Missing token")
+    doc = await db.settings.find_one({"_id": "extension"})
+    if not doc or doc.get("token") != token:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    return doc.get("user_id") or DEFAULT_USER
+
+
+@api_router.get("/extension/setup")
+async def extension_setup():
+    """Return the extension token (generates one on first call). Used by the web app."""
+    token = await _get_or_create_ext_token()
+    return {"token": token, "backend_url": os.environ.get("PUBLIC_BACKEND_URL") or ""}
+
+
+@api_router.post("/extension/setup/rotate")
+async def extension_rotate_token():
+    token = uuid.uuid4().hex + uuid.uuid4().hex[:16]
+    await db.settings.update_one(
+        {"_id": "extension"},
+        {"$set": {"token": token, "user_id": DEFAULT_USER, "rotated_at": now_iso()}},
+        upsert=True,
+    )
+    return {"token": token}
+
+
+@api_router.get("/extension/download")
+async def extension_download():
+    """Stream the entire /app/extension folder as a ready-to-load .zip."""
+    ext_dir = Path("/app/extension")
+    if not ext_dir.exists():
+        raise HTTPException(status_code=404, detail="Extension folder not found")
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for path in ext_dir.rglob("*"):
+            if path.is_file() and "__pycache__" not in str(path):
+                arcname = path.relative_to(ext_dir).as_posix()
+                z.write(path, arcname)
+    buf.seek(0)
+    return Response(
+        content=buf.getvalue(),
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="readbox-extension.zip"'},
+    )
+
+
+async def _find_or_create_reading_by_url(url: str, title: Optional[str], author: Optional[str], text: Optional[str], site_name: Optional[str]) -> tuple[dict, bool]:
+    """Return (reading_doc, created_flag). Reuses existing reading matched by source_url."""
+    existing = await db.readings.find_one({"user_id": DEFAULT_USER, "source_url": url}, {"_id": 0, "pdf_text": 0})
+    if existing:
+        return normalize_reading(existing), False
+    reading_id = str(uuid.uuid4())
+    inferred_title = (title or url).strip()[:250]
+    body = (text or "").strip()[:200000]
+    reading = {
+        "id": reading_id,
+        "user_id": DEFAULT_USER,
+        "title": inferred_title,
+        "author": (author or site_name or "").strip()[:120],
+        "read_date": now_iso()[:10],
+        "rating": None,
+        "review": "",
+        "liked": False,
+        "status": "completed",
+        "total_pages": None,
+        "pages_read": None,
+        "storage_path": None,
+        "file_name": None,
+        "pdf_text": body,
+        "source_type": "extension",
+        "source_url": url,
+        "site_name": site_name or "",
+        "synopsis": "",
+        "cover_color": _pick_color(inferred_title),
+        "created_at": now_iso(),
+        "updated_at": now_iso(),
+    }
+    await db.readings.insert_one(reading)
+    return strip_id({**reading}), True
+
+
+@api_router.post("/extension/save-page")
+async def ext_save_page(payload: ExtSavePage, x_readbox_token: Optional[str] = Header(None)):
+    await _verify_ext_token(x_readbox_token)
+    reading, created = await _find_or_create_reading_by_url(
+        payload.url, payload.title, payload.author, payload.text, payload.site_name
+    )
+    highlight = None
+    if payload.selected_text and payload.selected_text.strip():
+        h = {
+            "id": str(uuid.uuid4()),
+            "reading_id": reading["id"],
+            "text": payload.selected_text.strip()[:2000],
+            "note": "",
+            "ease": 2.5,
+            "interval_days": 0,
+            "repetitions": 0,
+            "due_date": now_iso()[:10],
+            "created_at": now_iso(),
+        }
+        await db.highlights.insert_one(dict(h))
+        highlight = h
+    return {"reading": reading, "created": created, "highlight": highlight}
+
+
+@api_router.post("/extension/save-highlight")
+async def ext_save_highlight(payload: ExtSaveHighlight, x_readbox_token: Optional[str] = Header(None)):
+    await _verify_ext_token(x_readbox_token)
+    reading, created = await _find_or_create_reading_by_url(
+        payload.url, payload.title, None, None, payload.site_name
+    )
+    entry = {
+        "id": str(uuid.uuid4()),
+        "reading_id": reading["id"],
+        "text": payload.text.strip()[:2000],
+        "note": (payload.note or "").strip()[:500],
+        "ease": 2.5,
+        "interval_days": 0,
+        "repetitions": 0,
+        "due_date": now_iso()[:10],
+        "created_at": now_iso(),
+    }
+    await db.highlights.insert_one(dict(entry))
+    return {"reading": reading, "created": created, "highlight": entry}
 
 
 app.include_router(api_router)

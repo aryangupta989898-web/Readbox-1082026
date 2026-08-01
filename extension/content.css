@@ -1,0 +1,42 @@
+/* Readbox floating highlight button */
+#readbox-hl-btn {
+    position: absolute;
+    z-index: 2147483646;
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 12px;
+    background: #00E054;
+    color: #14181C;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    border-radius: 999px;
+    box-shadow: 0 10px 24px rgba(0,0,0,0.35), 0 2px 6px rgba(0,0,0,0.25);
+    cursor: pointer;
+    transform: translate(-50%, 0);
+    transition: opacity .15s ease, transform .15s ease, background .15s ease;
+    opacity: 0;
+    user-select: none;
+    -webkit-user-select: none;
+    pointer-events: none;
+}
+#readbox-hl-btn.visible {
+    display: inline-flex;
+    opacity: 1;
+    pointer-events: auto;
+    animation: readbox-pop .18s ease-out;
+}
+#readbox-hl-btn:hover { background: #00c94a; }
+#readbox-hl-btn.saving { background: #FFB800; color: #14181C; }
+#readbox-hl-btn.saved { background: #40BCF4; color: #14181C; }
+#readbox-hl-btn .readbox-hl-icon {
+    font-size: 14px;
+    line-height: 1;
+    font-weight: 700;
+}
+@keyframes readbox-pop {
+    from { transform: translate(-50%, 6px); opacity: 0; }
+    to   { transform: translate(-50%, 0);   opacity: 1; }
+}

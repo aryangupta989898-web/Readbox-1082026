@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Readbox</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    width: 340px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #14181C;
+    color: #fff;
+    padding: 16px;
+  }
+  .brand { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+  .brand .dot { width: 10px; height: 10px; background: #00E054; border-radius: 3px; }
+  .brand h1 { font-size: 13px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
+  .brand .v { font-size: 10px; color: #667788; margin-left: auto; }
+  .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.15em; color: #99AABB; margin-bottom: 4px; }
+  .card {
+    background: #1B2228;
+    border: 1px solid #2C3440;
+    border-radius: 8px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .title { font-size: 14px; font-weight: 600; line-height: 1.35; margin-bottom: 4px; word-wrap: break-word; }
+  .meta { font-size: 11px; color: #99AABB; word-break: break-all; }
+  .actions { display: flex; gap: 8px; }
+  button {
+    flex: 1;
+    border: 0;
+    padding: 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background .15s ease;
+  }
+  .primary { background: #00E054; color: #14181C; }
+  .primary:hover { background: #00c94a; }
+  .primary:disabled { background: #2C3440; color: #667788; cursor: not-allowed; }
+  .secondary { background: transparent; border: 1px solid #2C3440; color: #fff; }
+  .secondary:hover { background: #2C3440; }
+  .status {
+    margin-top: 10px;
+    font-size: 12px;
+    color: #99AABB;
+    min-height: 16px;
+  }
+  .status.ok { color: #00E054; }
+  .status.err { color: #FF2A79; }
+  .link {
+    display: block;
+    margin-top: 10px;
+    font-size: 11px;
+    color: #40BCF4;
+    text-decoration: none;
+    text-align: center;
+  }
+  .link:hover { text-decoration: underline; }
+  .not-connected {
+    background: #FF8000;
+    color: #14181C;
+    padding: 8px;
+    border-radius: 6px;
+    font-size: 12px;
+    margin-bottom: 12px;
+    font-weight: 500;
+    text-align: center;
+  }
+  .not-connected a { color: #14181C; text-decoration: underline; }
+</style>
+</head>
+<body>
+  <div class="brand">
+    <div class="dot"></div>
+    <h1>Readbox</h1>
+    <span class="v" id="version"></span>
+  </div>
+
+  <div id="not-connected" class="not-connected" style="display:none;">
+    Not connected. <a href="#" id="open-options">Open settings to paste your token.</a>
+  </div>
+
+  <div class="label">This page</div>
+  <div class="card">
+    <div class="title" id="page-title">Loading…</div>
+    <div class="meta" id="page-url"></div>
+  </div>
+
+  <div class="actions">
+    <button class="primary" id="save-page-btn" data-testid="popup-save-page">Save Reading</button>
+    <button class="secondary" id="save-selection-btn" data-testid="popup-save-selection" disabled>Save Selection</button>
+  </div>
+
+  <div class="status" id="status" data-testid="popup-status"></div>
+
+  <a class="link" href="#" id="open-options-2">⚙ Extension settings</a>
+  <a class="link" href="#" id="open-readbox">Open Readbox library →</a>
+
+<script src="popup.js"></script>
+</body>
+</html>

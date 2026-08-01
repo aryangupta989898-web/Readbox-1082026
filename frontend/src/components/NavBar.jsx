@@ -1,8 +1,9 @@
 import React, { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { BookOpen, Plus } from "@phosphor-icons/react";
+import { BookOpen, Plus, PuzzlePiece } from "@phosphor-icons/react";
 import { Button } from "./ui/button";
+import { ExtensionDialog } from "./ExtensionDialog";
 
 const links = [
     { to: "/", label: "Home", end: true },
@@ -17,6 +18,7 @@ const links = [
 
 export const NavBar = ({ onLog }) => {
     const [stamp, setStamp] = useState(false);
+    const [extOpen, setExtOpen] = useState(false);
     return (
         <header
             className="sticky top-0 z-40 backdrop-blur-xl border-b"
@@ -61,6 +63,15 @@ export const NavBar = ({ onLog }) => {
                         </NavLink>
                     ))}
                 </nav>
+                <button
+                    onClick={() => setExtOpen(true)}
+                    className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-[#99AABB] hover:text-white transition border border-[#2C3440] hover:border-[#00E054] px-3 py-1.5 rounded-full"
+                    data-testid="header-extension-btn"
+                    title="Chrome extension setup"
+                >
+                    <PuzzlePiece size={13} weight="fill" />
+                    Extension
+                </button>
                 <Button
                     onClick={onLog}
                     className="rounded-full bg-[#00E054] text-[#14181C] hover:bg-[#00c94a] font-semibold"
@@ -69,6 +80,7 @@ export const NavBar = ({ onLog }) => {
                     <Plus size={16} weight="bold" className="mr-1" /> Log
                 </Button>
             </div>
+            <ExtensionDialog open={extOpen} onOpenChange={setExtOpen} />
         </header>
     );
 };
