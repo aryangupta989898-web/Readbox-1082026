@@ -62,6 +62,9 @@ export const WishlistPage = () => {
                             className="group flex items-center gap-4 p-4 rounded-lg border border-[#2C3440] bg-[#1B2228] hover:border-[#40BCF4]/50 transition"
                             data-testid={`wishlist-item-${item.id}`}
                         >
+                            {item.cover_url ? (
+                                <img src={item.cover_url} alt="" className="w-12 h-16 rounded-sm object-cover flex-shrink-0 border border-[#2C3440]" loading="lazy" />
+                            ) : (
                             <div
                                 className="w-12 h-16 rounded-sm flex items-center justify-center flex-shrink-0 relative overflow-hidden"
                                 style={{ background: `linear-gradient(135deg, ${item.cover_color} 0%, ${item.cover_color}66 100%)` }}
@@ -69,6 +72,7 @@ export const WishlistPage = () => {
                                 <div className="absolute inset-0 grain" />
                                 <BookmarkSimple size={18} color="#14181C" weight="fill" />
                             </div>
+                            )}
                             <div className="flex-1 min-w-0">
                                 <div className="font-heading font-bold truncate" data-testid={`wishlist-title-${item.id}`}>{item.title}</div>
                                 {item.author && <div className="text-xs text-[#99AABB] truncate italic" style={{ fontFamily: "Cormorant Garamond, serif" }}>by {item.author}</div>}

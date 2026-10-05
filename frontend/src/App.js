@@ -13,6 +13,8 @@ import { AuthorPage } from "./pages/AuthorPage";
 import { ListsPage } from "./pages/ListsPage";
 import { ListDetailPage } from "./pages/ListDetailPage";
 import { WishlistPage } from "./pages/WishlistPage";
+import { SearchPage } from "./pages/SearchPage";
+import { BookPage } from "./pages/BookPage";
 import { LogReadingDialog } from "./components/LogReadingDialog";
 import { Toaster } from "./components/ui/sonner";
 import { Navigate } from "react-router-dom";
@@ -25,14 +27,16 @@ const RecapRedirect = () => {
 function App() {
     const [logOpen, setLogOpen] = useState(false);
     const [refreshKey, setRefreshKey] = useState(0);
+    const [logPrefill, setLogPrefill] = useState(null);
+    const openLog = (prefill = null) => { setLogPrefill(prefill); setLogOpen(true); };
 
     return (
         <div className="App">
             <BrowserRouter>
-                <NavBar onLog={() => setLogOpen(true)} />
+                <NavBar onLog={() => openLog()} />
                 <main key={refreshKey}>
                     <Routes>
-                        <Route path="/" element={<ActivityPage onLog={() => setLogOpen(true)} />} />
+                        <Route path="/" element={<ActivityPage onLog={() => openLog()} />} />
                         <Route path="/diary" element={<DiaryPage />} />
                         <Route path="/readings" element={<ReadingsGridPage />} />
                         <Route path="/readings/:id" element={<ReadingDetailPage />} />
@@ -44,11 +48,14 @@ function App() {
                         <Route path="/lists" element={<ListsPage />} />
                         <Route path="/lists/:id" element={<ListDetailPage />} />
                         <Route path="/wishlist" element={<WishlistPage />} />
+                        <Route path="/search" element={<SearchPage />} />
+                        <Route path="/book/:bookId" element={<BookPage onLog={openLog} />} />
                     </Routes>
                 </main>
                 <LogReadingDialog
                     open={logOpen}
-                    onOpenChange={setLogOpen}
+                    onOpenChange={(o) => { setLogOpen(o); if (!o) setLogPrefill(null); }}
+                    prefill={logPrefill}
                     onCreated={() => setRefreshKey((k) => k + 1)}
                 />
                 <Toaster theme="dark" richColors position="bottom-right" />
