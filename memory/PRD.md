@@ -19,6 +19,8 @@ A web app to log reading resources (PDFs, articles, books) with AI-extracted syn
 - **[Feb 2026] Backend response normalization** — legacy readings return new schema fields.
 - **[Feb 2026] Lists (P1)** — Dune-style pastel cards with 4-cover mosaic previews. Create/edit/delete lists, add/remove readings. `AddToListButton` popover on ReadingDetail with quick-create. 8-color palette shared backend↔frontend.
 - **[Feb 2026] Wishlist (P1)** — Manual or PDF-attached items. Notes field. `Start Reading` promotes wishlist → Currently Reading (copies PDF, extracts text, deletes original wishlist doc). PDF copy failure fails safe (clears storage_path so reading doesn't dangle).
+- **[Oct 2026] Log from Link** — "From Link" mode in Log dialog. `POST /api/import/url` fetches + extracts (trafilatura; PDFs via pypdf) for preview with word count and paywall/JS warnings; `POST /readings` accepts `source_url` (+ optional previewed `text_content`, `site_name`). SSRF-guarded (public IPs only, redirects re-checked, 25 MB cap). Paywalled/login pages still need the extension.
+- **[Oct 2026] Universal book search** — `GET /api/books/search?q=` (Google Books, Open Library fallback; optional `GOOGLE_BOOKS_API_KEY`), `GET /api/books/{gb:…|ol:…}` cached 30 days in `book_cache`. Header search → `/search` (your library + catalog) → `/book/:bookId` preview page with Log it / Start reading / Want to read (wishlist) — browse without logging. "Find Book" mode in Log dialog. Readings/wishlist store `book_id`, `cover_url`, `book_description`, `book_blurb`; descriptions are cleaned and capped to a 2–3 sentence blurb so every book card has the same shape.
 
 ## Backlog
 
@@ -27,6 +29,7 @@ A web app to log reading resources (PDFs, articles, books) with AI-extracted syn
 - In-app PDF viewer
 
 ### P2
+- AI-normalized book blurbs (one call per book, cached globally in `book_cache`) once LLM budget is back
 - 100-cover canon uploader (admin UI + `/api/canon/daily` endpoint to rotate favorite covers on the homepage)
 - Migrate cover gen to fal.ai FLUX Pro 1.1 (needs fal.ai key)
 - Multi-user auth
@@ -42,3 +45,4 @@ A web app to log reading resources (PDFs, articles, books) with AI-extracted syn
 ## Test Suite
 - `/app/backend/tests/test_p0_features.py` — P0 regression (Currently Reading, Likes, Author, Select All).
 - `/app/backend/tests/test_lists_wishlist.py` — P1 Lists + Wishlist CRUD + conversion.
+- `/app/backend/tests/test_importers.py` — offline unit tests for link extraction, SSRF guard, description cleanup, catalog parsing/fallback.

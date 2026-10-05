@@ -64,3 +64,8 @@ export const createWishlist = (formData) => api.post("/wishlist", formData, { he
 export const updateWishlist = (id, patch) => api.patch(`/wishlist/${id}`, patch).then((r) => r.data);
 export const deleteWishlist = (id) => api.delete(`/wishlist/${id}`).then((r) => r.data);
 export const convertWishlistToReading = (id, status = "reading") => api.post(`/wishlist/${id}/convert?status=${status}`).then((r) => r.data);
+
+// Import: links & book catalog search
+export const previewUrl = (url) => api.post("/import/url", { url }).then((r) => r.data);
+export const searchBooks = (q, limit = 12) => api.get("/books/search", { params: { q, limit } }).then((r) => r.data);
+export const fetchBook = (bookId) => api.get(`/books/${encodeURIComponent(bookId)}`).then((r) => r.data);

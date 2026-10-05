@@ -9,7 +9,9 @@ export const Cover = ({ reading, title, color = "#00E054", size = "md", classNam
         lg: "w-32 h-48 text-base",
         xl: "w-48 h-72 text-lg",
     };
-    const hasCover = reading?.cover_image_path;
+    // Generated art wins; otherwise fall back to the catalog cover for books found via search
+    const generated = reading?.cover_image_path && reading?.id ? coverUrl(reading.id) : null;
+    const coverSrc = generated || reading?.cover_url || null;
     const displayTitle = title || reading?.title || "?";
     const displayColor = color || reading?.cover_color || "#00E054";
     const initials = (displayTitle || "?")
@@ -21,17 +23,17 @@ export const Cover = ({ reading, title, color = "#00E054", size = "md", classNam
 
     const [imgError, setImgError] = useState(false);
 
-    if (hasCover && !imgError && reading?.id) {
+    if (coverSrc && !imgError) {
         return (
             <div className={`relative overflow-hidden rounded-sm border border-[#2C3440] flex-shrink-0 ${sizes[size]} ${className}`}>
                 <img
-                    src={coverUrl(reading.id)}
+                    src={coverSrc}
                     alt={displayTitle}
                     onError={() => setImgError(true)}
                     className="w-full h-full object-cover"
                     loading="lazy"
                 />
-                {size !== "xs" && (
+                {size !== "xs" && generated && (
                     <div className="absolute inset-x-0 bottom-0 p-2 bg-gradient-to-t from-black/95 via-black/70 to-transparent">
                         <div className="font-heading font-bold text-white text-xs sm:text-sm leading-tight line-clamp-3 drop-shadow-lg" style={{textShadow: '0 2px 6px rgba(0,0,0,0.9)'}}>
                             {displayTitle}

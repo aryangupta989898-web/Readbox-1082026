@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { BookOpen, Plus, PuzzlePiece } from "@phosphor-icons/react";
+import { BookOpen, Plus, PuzzlePiece, MagnifyingGlass } from "@phosphor-icons/react";
 import { Button } from "./ui/button";
 import { ExtensionDialog } from "./ExtensionDialog";
 
@@ -19,6 +19,13 @@ const links = [
 export const NavBar = ({ onLog }) => {
     const [stamp, setStamp] = useState(false);
     const [extOpen, setExtOpen] = useState(false);
+    const [q, setQ] = useState("");
+    const nav = useNavigate();
+    const submitSearch = (e) => {
+        e.preventDefault();
+        nav(q.trim() ? `/search?q=${encodeURIComponent(q.trim())}` : "/search");
+        setQ("");
+    };
     return (
         <header
             className="sticky top-0 z-40 backdrop-blur-xl border-b"
@@ -63,6 +70,19 @@ export const NavBar = ({ onLog }) => {
                         </NavLink>
                     ))}
                 </nav>
+                <form onSubmit={submitSearch} className="relative hidden lg:block" data-testid="header-search-form">
+                    <MagnifyingGlass size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#667788]" />
+                    <input
+                        value={q}
+                        onChange={(e) => setQ(e.target.value)}
+                        placeholder="Search books"
+                        className="w-40 focus:w-56 transition-all bg-[#1B2228] border border-[#2C3440] focus:border-[#00E054] outline-none rounded-full pl-8 pr-3 py-1.5 text-sm text-white placeholder:text-[#667788]"
+                        data-testid="header-search-input"
+                    />
+                </form>
+                <NavLink to="/search" className="lg:hidden text-[#99AABB] hover:text-white" title="Search books" data-testid="header-search-link">
+                    <MagnifyingGlass size={18} />
+                </NavLink>
                 <button
                     onClick={() => setExtOpen(true)}
                     className="flex items-center gap-1.5 text-xs uppercase tracking-widest text-[#99AABB] hover:text-white transition border border-[#2C3440] hover:border-[#00E054] px-3 py-1.5 rounded-full"

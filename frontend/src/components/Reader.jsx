@@ -127,7 +127,7 @@ export const Reader = ({ readingId, title, author, onClose, onHighlightAdded }) 
                 </button>
                 <div className="flex-1 min-w-0">
                     <div className="text-[10px] uppercase tracking-[0.2em] text-[#667788]">
-                        {hasPdf ? "PDF · Native View" : sourceType === "text" ? "Pasted Text" : "Reading"}
+                        {hasPdf ? "PDF · Native View" : sourceType === "text" ? "Pasted Text" : sourceType === "url" ? "Web Article" : "Reading"}
                     </div>
                     <div className="text-sm text-white truncate font-medium" data-testid="reader-title">{title}</div>
                     {author && (

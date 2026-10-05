@@ -15,8 +15,11 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
+from urllib.parse import urlparse
 from pypdf import PdfReader
+from starlette.concurrency import run_in_threadpool
 from emergentintegrations.llm.chat import LlmChat, UserMessage
+import importers
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -138,6 +141,10 @@ class ListReadingOp(BaseModel):
     reading_id: str
 
 
+class UrlImportRequest(BaseModel):
+    url: str
+
+
 class WishlistCreate(BaseModel):
     title: str
     author: Optional[str] = ""
@@ -257,12 +264,17 @@ async def create_reading(
     status: Optional[str] = Form(None),
     total_pages: Optional[int] = Form(None),
     pages_read: Optional[int] = Form(None),
+    source_url: Optional[str] = Form(None),
+    book_id: Optional[str] = Form(None),
+    site_name: Optional[str] = Form(None),
 ):
     reading_id = str(uuid.uuid4())
     storage_path = None
     pdf_text = ""
     file_name = None
     source_type = "manual"
+    extra = {}
+    source_url = importers.normalize_url(source_url) if source_url and source_url.strip() else None
 
     if file:
         data = await file.read()
@@ -280,7 +292,37 @@ async def create_reading(
     elif text_content and text_content.strip():
         # Pasted text reading — preserve words exactly, only normalize excessive whitespace
         pdf_text = text_content.strip()[:200000]
-        source_type = "text"
+        source_type = "url" if source_url else "text"
+    elif source_url:
+        page = await _load_url(source_url)
+        source_url = page["url"]
+        if page.get("pdf_bytes"):
+            storage_path = f"{APP_NAME}/uploads/{DEFAULT_USER}/{reading_id}.pdf"
+            try:
+                storage_path = put_object(storage_path, page["pdf_bytes"], "application/pdf")["path"]
+            except Exception as e:
+                logger.error(f"Storage upload failed: {e}")
+                raise HTTPException(status_code=500, detail="File upload failed")
+            file_name = page.get("file_name")
+        pdf_text = page["text"][:200000]
+        source_type = "url"
+        title = title or page["title"] or None
+        author = author or page["author"] or None
+        extra["site_name"] = page["site_name"]
+    elif book_id:
+        book = await _get_book_cached(book_id)
+        source_type = "book"
+        title = title or book["title"] or None
+        author = author or ", ".join(book["authors"][:2]) or None
+        if total_pages is None and book.get("page_count"):
+            total_pages = book["page_count"]
+        extra.update(_book_fields(book))
+
+    if source_url:
+        extra["source_url"] = source_url
+        if site_name and site_name.strip():
+            extra.setdefault("site_name", site_name.strip()[:120])
+        extra.setdefault("site_name", (urlparse(source_url).hostname or "").removeprefix("www."))
 
     inferred_title = title or (file_name.rsplit(".", 1)[0] if file_name else "Untitled Reading")
 
@@ -307,6 +349,7 @@ async def create_reading(
         "cover_color": _pick_color(inferred_title),
         "created_at": now_iso(),
         "updated_at": now_iso(),
+        **extra,
     }
 
     await db.readings.insert_one(reading)
@@ -993,15 +1036,137 @@ async def remove_reading_from_list(list_id: str, reading_id: str):
     return {"ok": True}
 
 
+# ============ Import: links & book search ============
+async def _load_url(url: str) -> dict:
+    """Fetch a link and return {url, title, author, site_name, text, pdf_bytes?, file_name?}."""
+    try:
+        body, content_type, final_url = await run_in_threadpool(importers.fetch_url, url)
+    except importers.ImportFailed as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    host = (urlparse(final_url).hostname or "").removeprefix("www.")
+    if importers.is_pdf(body, content_type):
+        name = urlparse(final_url).path.rsplit("/", 1)[-1] or "document.pdf"
+        text = await run_in_threadpool(extract_pdf_text, body, 200000)
+        return {
+            "url": final_url, "title": re.sub(r"\.pdf$", "", name, flags=re.I).replace("_", " ").replace("-", " ").strip(),
+            "author": "", "site_name": host, "text": text, "pdf_bytes": body, "file_name": name, "is_pdf": True,
+        }
+    if not content_type.startswith("text/") and "html" not in content_type and content_type:
+        raise HTTPException(status_code=422, detail="That link isn't an article or PDF")
+    html = body.decode("utf-8", errors="replace")
+    article = await run_in_threadpool(importers.extract_article, html, final_url)
+    return {"url": final_url, **article, "is_pdf": False}
+
+
+@api_router.post("/import/url")
+async def preview_url(payload: UrlImportRequest):
+    """Fetch a link and return its extracted text so the user can review before logging."""
+    page = await _load_url(payload.url)
+    words = importers.word_count(page["text"])
+    warning = ""
+    if words == 0:
+        warning = "No readable text found. The page may need a login, block bots, or load its content with JavaScript. Try the Chrome extension or paste the text."
+    elif words < 150:
+        warning = "Only a short snippet came through. This is often a paywall or a preview — the Chrome extension can save the full page while you're logged in."
+    existing = await db.readings.find_one({"user_id": DEFAULT_USER, "source_url": page["url"]}, {"_id": 0, "id": 1, "title": 1})
+    return {
+        "url": page["url"],
+        "title": page["title"],
+        "author": page["author"],
+        "site_name": page["site_name"],
+        "is_pdf": page["is_pdf"],
+        "text": "" if page["is_pdf"] else page["text"],
+        "excerpt": page["text"][:600],
+        "word_count": words,
+        "warning": warning,
+        "existing_reading": existing,
+    }
+
+
+BOOK_CACHE_TTL = timedelta(days=30)
+
+
+async def _get_book_cached(book_id: str) -> dict:
+    cached = await db.book_cache.find_one({"id": book_id}, {"_id": 0})
+    if cached and cached.get("cached_at", "") > (datetime.now(timezone.utc) - BOOK_CACHE_TTL).isoformat():
+        return cached["data"]
+    try:
+        book = await run_in_threadpool(importers.get_book, book_id)
+    except importers.ImportFailed as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Book lookup failed: {e}")
+        if cached:
+            return cached["data"]
+        raise HTTPException(status_code=502, detail="Book catalog is unavailable right now")
+    await db.book_cache.update_one({"id": book_id}, {"$set": {"id": book_id, "data": book, "cached_at": now_iso()}}, upsert=True)
+    return book
+
+
+def _book_fields(book: dict) -> dict:
+    """Fields copied from a catalog book onto a reading or wishlist item."""
+    return {
+        "book_id": book["id"],
+        "cover_url": book.get("cover_url") or "",
+        "book_description": book.get("description") or "",
+        "book_blurb": book.get("blurb") or "",
+        "book_year": book.get("year"),
+        "book_subjects": book.get("subjects") or [],
+        "synopsis": book.get("blurb") or "",
+    }
+
+
+async def _library_matches(book_ids: List[str]) -> dict:
+    """Map book_id → {reading_id} / {wishlist_id} for books the user already has."""
+    out = {}
+    async for r in db.readings.find({"user_id": DEFAULT_USER, "book_id": {"$in": book_ids}}, {"_id": 0, "id": 1, "book_id": 1, "status": 1}):
+        out.setdefault(r["book_id"], {})["reading_id"] = r["id"]
+        out[r["book_id"]]["status"] = r.get("status")
+    async for w in db.wishlist.find({"user_id": DEFAULT_USER, "book_id": {"$in": book_ids}}, {"_id": 0, "id": 1, "book_id": 1}):
+        out.setdefault(w["book_id"], {})["wishlist_id"] = w["id"]
+    return out
+
+
+@api_router.get("/books/search")
+async def books_search(q: str, limit: int = 12):
+    try:
+        results = await run_in_threadpool(importers.search_books, q, max(1, min(limit, 20)))
+    except importers.ImportFailed as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    owned = await _library_matches([r["id"] for r in results])
+    for r in results:
+        r["library"] = owned.get(r["id"])
+    return results
+
+
+@api_router.get("/books/{book_id}")
+async def books_get(book_id: str):
+    book = dict(await _get_book_cached(book_id))
+    book["library"] = (await _library_matches([book_id])).get(book_id)
+    return book
+
+
 # ============ Wishlist ============
 @api_router.post("/wishlist")
 async def create_wishlist(
     file: Optional[UploadFile] = File(None),
-    title: str = Form(...),
+    title: Optional[str] = Form(None),
     author: Optional[str] = Form(""),
     notes: Optional[str] = Form(""),
+    book_id: Optional[str] = Form(None),
 ):
     item_id = str(uuid.uuid4())
+    book_extra = {}
+    if book_id:
+        book = await _get_book_cached(book_id)
+        title = title or book["title"]
+        author = author or ", ".join(book["authors"][:2])
+        book_extra = _book_fields(book)
+        book_extra.pop("synopsis", None)
+        if book.get("page_count"):
+            book_extra["total_pages"] = book["page_count"]
+    if not title or not title.strip():
+        raise HTTPException(status_code=422, detail="Title is required")
     storage_path = None
     file_name = None
     if file:
@@ -1027,6 +1192,7 @@ async def create_wishlist(
         "cover_color": _pick_color(title),
         "created_at": now_iso(),
         "updated_at": now_iso(),
+        **book_extra,
     }
     await db.wishlist.insert_one(dict(doc))
     return strip_id(doc)
@@ -1088,16 +1254,20 @@ async def convert_wishlist_to_reading(item_id: str, status: str = "reading"):
         "review": "",
         "liked": False,
         "status": normalized_status,
-        "total_pages": None,
+        "total_pages": item.get("total_pages"),
         "pages_read": 0 if normalized_status == "reading" else None,
         "storage_path": new_storage_path,
         "file_name": item.get("file_name"),
         "pdf_text": pdf_text,
-        "synopsis": "",
+        "synopsis": item.get("book_blurb") or "",
         "cover_color": item.get("cover_color") or _pick_color(item.get("title") or "x"),
         "created_at": now_iso(),
         "updated_at": now_iso(),
     }
+    if item.get("book_id"):
+        reading["source_type"] = "book"
+        for k in ("book_id", "cover_url", "book_description", "book_blurb", "book_year", "book_subjects"):
+            reading[k] = item.get(k)
     await db.readings.insert_one(reading)
     await db.wishlist.delete_one({"id": item_id})
     return strip_id(reading)
